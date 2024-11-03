@@ -3,7 +3,7 @@ steps:
     name: "golang"
     entrypoint: /bin/bash
     args:
-    - -c
-    - |
-      go mod tidy
-	    env GOOS=linux GOARCH=amd64 go build -o=/workspace/nwc-trading-server .
+      - -c
+      - |
+        go mod tidy
+        env GOOS=linux GOARCH=amd64 go build -o=/workspace/nwc-trading-server .
