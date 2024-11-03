@@ -13,5 +13,5 @@ build-linux:
 	env GOOS=linux GOARCH=amd64 go build -o=build/asset-market-linux .
 
 ciBuild: 
-	go install
+	go mod tidy
 	env GOOS=linux GOARCH=amd64 go build -o=/workspace/nwc-trading-server .
