@@ -1,4 +1,4 @@
 steps:
   - id: "Build application"
-    name: "go"
+    name: "golang"
     entrypoint: /usr/bin/make ciBuild
