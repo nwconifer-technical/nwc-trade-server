@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=root
-exec=/root/nwc-trading-server
+ExecStaart=/alicolliar/nwc-trading-server
 
 [Install]
 WantedBy=multi-user.target

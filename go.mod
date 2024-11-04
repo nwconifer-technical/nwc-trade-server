@@ -1,6 +1,6 @@
 module nwconifer-trade.com
 
-go 1.23.0
+go 1.22.2
 
 require (
 	cloud.google.com/go/firestore v1.17.0

@@ -30,7 +30,7 @@ func main() {
 	}
 	testConn.Release()
 	defer dbPool.Close()
-	fsClient, err := firestore.NewClientWithDatabase(primCtx, "nsinvest-infra", "nwc-trade-test")
+	fsClient, err := firestore.NewClientWithDatabase(primCtx, os.Getenv("PROJECT_ID"), os.Getenv("FIRESTORE_DB"))
 	if err != nil {
 		log.Panic(err)
 	}
@@ -61,7 +61,7 @@ func main() {
 	})
 
 	theServer := http.Server{
-		Addr:    ":8080",
+		Addr:    `:http`,
 		Handler: theMux,
 		// WriteTimeout: 5 * time.Second,
 	}
