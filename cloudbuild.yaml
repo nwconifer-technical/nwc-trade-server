@@ -1,0 +1,17 @@
+steps:
+  - id: "Build application"
+    name: "golang"
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - |
+        go mod tidy
+        env GOOS=linux GOARCH=amd64 go build -o=/workspace/nwc-trading-server .
+  - id: "Copy onto Box and Restart"
+    name: "gcr.io/cloud-builders/gcloud"
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - |
+        gcloud compute scp /workspace/nwc-trading-server alicolliar@trade-api-server:~
+        gcloud compute ssh alicolliar@trade-api-server --command="sudo systemctl restart trade-api"
