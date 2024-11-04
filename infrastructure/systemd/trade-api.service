@@ -1,0 +1,14 @@
+[Unit]
+Description=NWC Trade API
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=root
+exec=/root/nwc-trading-server
+
+[Install]
+WantedBy=multi-user.target
