@@ -37,6 +37,10 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		return
 	}
 	if err = handCashTransaction(&sentThing, r.Context(), dbTx, fsClient); err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Transact Err", err)
 		return
