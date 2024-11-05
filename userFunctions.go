@@ -160,7 +160,7 @@ func nationInfo(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 	}{}
 	requedNat := r.PathValue("natName")
 	log.Println("Nation info requested for", requedNat)
-	err := dbPool.QueryRow(r.Context(), "SELECT account_name, region_name, cash_in_hand, cash_in_escrow FROM nation_accounts, nation_permissions WHERE nation_name = $1 AND nation_accounts.account_name = region_accounts.nation_name;", requedNat).Scan(&returnHello.NationName, &returnHello.Region, &returnHello.CashInHand, &returnHello.CashInEscrow)
+	err := dbPool.QueryRow(r.Context(), "SELECT account_name, region_name, cash_in_hand, cash_in_escrow FROM accounts, nation_permissions WHERE nation_name = $1 AND nation_accounts.account_name = region_accounts.nation_name;", requedNat).Scan(&returnHello.NationName, &returnHello.Region, &returnHello.CashInHand, &returnHello.CashInEscrow)
 	if err == pgx.ErrNoRows {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -208,7 +208,7 @@ func nationCashDetails(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.P
 			},
 		},
 	}
-	documents := fsClient.Collection(CASH_TRANSACT_COLL).WhereEntity(theFilter).Documents(r.Context())
+	documents := fsClient.Collection(CASH_TRANSACT_COLL).WhereEntity(theFilter).OrderBy("timestamp", firestore.Desc).Limit(25).Documents(r.Context())
 	for {
 		docu, err := documents.Next()
 		if err != nil {
