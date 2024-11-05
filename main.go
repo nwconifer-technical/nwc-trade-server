@@ -64,7 +64,7 @@ func main() {
 	})
 
 	theServer := http.Server{
-		Addr:    `:8080`,
+		Addr:    `:https`,
 		Handler: theMux,
 		// WriteTimeout: 5 * time.Second,
 	}
