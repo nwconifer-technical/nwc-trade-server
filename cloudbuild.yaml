@@ -13,7 +13,7 @@ steps:
     args:
       - -c
       - |
-        gcloud compute ssh alicolliar@trade-api-server --command="sudo systemctl restart trade-api" --zone="us-central1-a"
+        gcloud compute ssh alicolliar@trade-api-server --command="sudo systemctl stop trade-api" --zone="us-central1-a"
         gcloud compute scp /workspace/nwc-trading-server alicolliar@trade-api-server:~ --zone="us-central1-a"
         gcloud compute ssh alicolliar@trade-api-server --command="sudo systemctl start trade-api" --zone="us-central1-a"
 
