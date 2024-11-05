@@ -69,8 +69,7 @@ func main() {
 		// WriteTimeout: 5 * time.Second,
 	}
 	log.Println("NWC Trade Server Started")
-	// err = theServer.ListenAndServeTLS("server.crt", "server.key")
-	err = theServer.ListenAndServe()
+	err = theServer.ListenAndServeTLS("server.crt", "server.key")
 	defer theServer.Shutdown(primCtx)
 	log.Panicln("The server broke", err)
 }
