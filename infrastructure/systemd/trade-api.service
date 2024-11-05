@@ -6,9 +6,10 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 Restart=always
-RestartSec=1
+RestartSec=10
 User=root
-ExecStaart=/alicolliar/nwc-trading-server
+WorkingDirectory=/home/alicolliar
+ExecStart=/bin/bash -lc /home/alicolliar/nwc-trading-server
 
 [Install]
 WantedBy=multi-user.target
