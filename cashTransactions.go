@@ -13,11 +13,11 @@ import (
 )
 
 type transactionFormat struct {
-	Timecode time.Time `firestore:"timestamp" json:"timecode"`
+	Timecode time.Time `firestore:"timestamp" json:"timecode,omitempty"`
 	Sender   string    `firestore:"sender" json:"sender"`
 	Receiver string    `firestore:"receiver" json:"receiver"`
 	Value    float64   `firestore:"value" json:"value"`
-	Message  string    `firestoe:"message, omitempty" json:"message"`
+	Message  string    `firestoe:"message,omitempty" json:"message"`
 }
 
 func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client) {

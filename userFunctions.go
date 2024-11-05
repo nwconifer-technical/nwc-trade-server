@@ -78,7 +78,7 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	}
 	var dbPassHash string = ""
 	var dbUserRegion string = ""
-	err = dbPool.QueryRow(r.Context(), "SELECT accounts_pass_hash FROM accounts WHERE account_name = $1", user.NationName).Scan(&dbPassHash, &dbUserRegion)
+	err = dbPool.QueryRow(r.Context(), "SELECT account_pass_hash FROM accounts WHERE account_name = $1", user.NationName).Scan(&dbPassHash, &dbUserRegion)
 	if err != nil {
 		errStr := err.Error()
 		if errStr == pgx.ErrNoRows.Error() {
@@ -110,8 +110,8 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		log.Println("JSON err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	w.WriteHeader(http.StatusAccepted)
 	outEncoder.Encode(returnValue)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func registerRegion(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
