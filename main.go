@@ -37,6 +37,9 @@ func main() {
 	defer fsClient.Close()
 
 	theMux := http.NewServeMux()
+	theMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello!"))
+	})
 	theMux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Pinged")
 		w.WriteHeader(http.StatusOK)
@@ -61,12 +64,13 @@ func main() {
 	})
 
 	theServer := http.Server{
-		Addr:    `:https`,
+		Addr:    `:8080`,
 		Handler: theMux,
 		// WriteTimeout: 5 * time.Second,
 	}
 	log.Println("NWC Trade Server Started")
-	err = theServer.ListenAndServeTLS("server.crt", "server.key")
+	// err = theServer.ListenAndServeTLS("server.crt", "server.key")
+	err = theServer.ListenAndServe()
 	defer theServer.Shutdown(primCtx)
 	log.Panicln("The server broke", err)
 }

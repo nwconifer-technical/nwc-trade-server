@@ -34,7 +34,6 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 		log.Println("DB Err 0", err)
 	}
 	err = decoder.Decode(&newUser)
-	log.Println(newUser)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("JSON Err 1", err)
@@ -59,6 +58,7 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 		log.Println("DB Err 4", err)
 		return
 	}
+	log.Println("User Created")
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -78,7 +78,7 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	}
 	var dbPassHash string = ""
 	var dbUserRegion string = ""
-	err = dbPool.QueryRow(r.Context(), "SELECT account_pass_hash FROM accounts WHERE account_name = $1", user.NationName).Scan(&dbPassHash, &dbUserRegion)
+	err = dbPool.QueryRow(r.Context(), "SELECT account_pass_hash, region_name FROM accounts, nation_permissions WHERE account_name = $1 AND account_name = nation_name", user.NationName).Scan(&dbPassHash, &dbUserRegion)
 	if err != nil {
 		errStr := err.Error()
 		if errStr == pgx.ErrNoRows.Error() {
@@ -105,7 +105,6 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		AuthKey:    hex.EncodeToString(authKey[:]),
 		UserRegion: dbUserRegion,
 	}
-	log.Println("AuthKey", hex.EncodeToString(authKey[:])) // MUST BE REMOVED PRE-LAUNCH!!!
 	if err != nil {
 		log.Println("JSON err", err)
 		w.WriteHeader(http.StatusInternalServerError)
