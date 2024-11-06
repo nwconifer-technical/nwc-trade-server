@@ -64,13 +64,12 @@ func main() {
 	})
 
 	theServer := http.Server{
-		Addr:    `:https`,
+		Addr:    `:8080`,
 		Handler: theMux,
 		// WriteTimeout: 5 * time.Second,
 	}
 	log.Println("NWC Trade Server Started")
-	err = theServer.ListenAndServeTLS("server.crt", "server.key")
-	err = theServer.ListenAndServeTLS("/etc/letsencrypt/live/api.finance.nwconifer.net/fullchain.pem", "/etc/letsencrypt/live/api.finance.nwconifer.net/privkey.pem")
+	err = theServer.ListenAndServe()
 	defer theServer.Shutdown(primCtx)
 	log.Panicln("The server broke", err)
 }
