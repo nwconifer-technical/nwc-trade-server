@@ -70,6 +70,7 @@ func main() {
 	}
 	log.Println("NWC Trade Server Started")
 	err = theServer.ListenAndServeTLS("server.crt", "server.key")
+	err = theServer.ListenAndServeTLS("/etc/letsencrypt/live/api.finance.nwconifer.net/fullchain.pem", "/etc/letsencrypt/live/api.finance.nwconifer.net/privkey.pem")
 	defer theServer.Shutdown(primCtx)
 	log.Panicln("The server broke", err)
 }
