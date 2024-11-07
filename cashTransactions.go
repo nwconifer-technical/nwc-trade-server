@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -16,7 +17,8 @@ type transactionFormat struct {
 	Timecode time.Time `firestore:"timestamp" json:"timecode,omitempty"`
 	Sender   string    `firestore:"sender" json:"sender"`
 	Receiver string    `firestore:"receiver" json:"receiver"`
-	Value    float64   `firestore:"value" json:"value"`
+	strValue string    `firestore:"-" json:"value"`
+	Value    float64   `firestore:"value"`
 	Message  string    `firestoe:"message,omitempty" json:"message"`
 }
 
@@ -26,6 +28,7 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	var sentThing transactionFormat
 	err := decoder.Decode(&sentThing)
 	sentThing.Timecode = time.Now()
+	sentThing.Value, _ = strconv.ParseFloat(sentThing.strValue, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Println("JSON Err", err)
