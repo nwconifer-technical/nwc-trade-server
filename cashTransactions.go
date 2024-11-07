@@ -45,7 +45,7 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		log.Println("Transact Err", err)
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
+	w.WriteHeader(http.StatusOK)
 }
 
 func handCashTransaction(transaction *transactionFormat, ctx context.Context, dbTx pgx.Tx, fsClient *firestore.Client) error {

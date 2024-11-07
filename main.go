@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -64,9 +65,9 @@ func main() {
 	})
 
 	theServer := http.Server{
-		Addr:    `:8080`,
-		Handler: theMux,
-		// WriteTimeout: 5 * time.Second,
+		Addr:        `:8080`,
+		Handler:     theMux,
+		ReadTimeout: 5 * time.Second,
 	}
 	log.Println("NWC Trade Server Started")
 	err = theServer.ListenAndServe()

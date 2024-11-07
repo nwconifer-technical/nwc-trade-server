@@ -16,11 +16,10 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-var HASH_COST = os.Getenv("HASH_COST")
+var HASH_COST, _ = strconv.Atoi(os.Getenv("HASH_COST"))
 var EXTRA_KEY_STRING = os.Getenv("EXTRA_KEY_STRING")
 
 func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
-	log.Println("NewUser Signup Request")
 	decoder := json.NewDecoder(r.Body)
 	var newUser struct {
 		NationName     string `json:"NationName"`
@@ -34,18 +33,14 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 		log.Println("DB Err 0", err)
 	}
 	err = decoder.Decode(&newUser)
+	log.Println("NewUser Signup Request", newUser)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		log.Println("JSON Err 1", err)
 		return
 	}
-	hashInt, err := strconv.Atoi(HASH_COST)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("AtoI err", err)
-		return
-	}
-	createdHash, _ := bcrypt.GenerateFromPassword([]byte(newUser.PasswordString), hashInt)
+	log.Println("Bcrypt started")
+	createdHash, _ := bcrypt.GenerateFromPassword([]byte(newUser.PasswordString), HASH_COST)
 	err = ourConn.QueryRow(r.Context(), "INSERT INTO accounts (account_name, account_pass_hash) VALUES ($1, $2)", newUser.NationName, string(createdHash)).Scan()
 	if err.Error() != "" && err != pgx.ErrNoRows {
 		w.WriteHeader(http.StatusConflict)
