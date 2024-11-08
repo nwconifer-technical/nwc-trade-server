@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -17,18 +16,17 @@ type transactionFormat struct {
 	Timecode time.Time `firestore:"timestamp" json:"timecode,omitempty"`
 	Sender   string    `firestore:"sender" json:"sender"`
 	Receiver string    `firestore:"receiver" json:"receiver"`
-	strValue string    `firestore:"-" json:"value"`
-	Value    float64   `firestore:"value"`
+	Value    string    `firestore:"value" json:"value"`
 	Message  string    `firestoe:"message,omitempty" json:"message"`
 }
 
 func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client) {
 	log.Println("Cash Transaction Occurring")
 	decoder := json.NewDecoder(r.Body)
-	var sentThing transactionFormat
+	var sentThing *transactionFormat
 	err := decoder.Decode(&sentThing)
 	sentThing.Timecode = time.Now()
-	sentThing.Value, _ = strconv.ParseFloat(sentThing.strValue, 64)
+	log.Println(sentThing)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Println("JSON Err", err)
@@ -39,7 +37,7 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if err = handCashTransaction(&sentThing, r.Context(), dbTx, fsClient); err != nil {
+	if err = handCashTransaction(sentThing, r.Context(), dbTx, fsClient); err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
 			return

@@ -222,5 +222,4 @@ func nationCashDetails(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.P
 		theReturn.Transactions = append(theReturn.Transactions, thisTransact)
 	}
 	encoder.Encode(theReturn)
-
 }
