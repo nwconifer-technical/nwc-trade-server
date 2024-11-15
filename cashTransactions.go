@@ -25,14 +25,13 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	decoder := json.NewDecoder(r.Body)
 	var sentThing *transactionFormat
 	err := decoder.Decode(&sentThing)
-	sentThing.Timecode = time.Now()
-	log.Println(sentThing)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Println("JSON Err", err)
 		return
 	}
 	dbTx, err := dbPool.Begin(r.Context())
+	defer dbTx.Rollback(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -46,22 +45,23 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		log.Println("Transact Err", err)
 		return
 	}
+	err = dbTx.Commit(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
 func handCashTransaction(transaction *transactionFormat, ctx context.Context, dbTx pgx.Tx, fsClient *firestore.Client) error {
+	transaction.Timecode = time.Now()
 	var err error
-	defer dbTx.Rollback(ctx)
 	err = dbTx.QueryRow(ctx, `UPDATE accounts SET cash_in_hand = cash_in_hand - $1 WHERE account_name = $2`, transaction.Value, transaction.Sender).Scan()
 	if err != pgx.ErrNoRows {
 		return err
 	}
 	err = dbTx.QueryRow(ctx, `UPDATE accounts SET cash_in_hand = cash_in_hand + $1 WHERE account_name = $2`, transaction.Value, transaction.Receiver).Scan()
 	if err != pgx.ErrNoRows {
-		return err
-	}
-	err = dbTx.Commit(ctx)
-	if err != nil {
 		return err
 	}
 	_, _, err = fsClient.Collection(CASH_TRANSACT_COLL).Add(ctx, transaction)

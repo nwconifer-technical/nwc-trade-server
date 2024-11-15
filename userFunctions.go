@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -19,15 +18,15 @@ import (
 var HASH_COST, _ = strconv.Atoi(os.Getenv("HASH_COST"))
 var EXTRA_KEY_STRING = os.Getenv("EXTRA_KEY_STRING")
 
-func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
+func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client) {
 	decoder := json.NewDecoder(r.Body)
 	var newUser struct {
 		NationName     string `json:"NationName"`
 		PasswordString string `json:"PasswordString"`
 		RegionName     string `json:"RegionName"`
 	}
-	ourConn, err := dbPool.Acquire(r.Context())
-	defer ourConn.Release()
+	ourTx, err := dbPool.Begin(r.Context())
+	defer ourTx.Rollback(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("DB Err 0", err)
@@ -41,18 +40,19 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 	}
 	log.Println("Bcrypt started")
 	createdHash, _ := bcrypt.GenerateFromPassword([]byte(newUser.PasswordString), HASH_COST)
-	err = ourConn.QueryRow(r.Context(), "INSERT INTO accounts (account_name, account_pass_hash) VALUES ($1, $2)", newUser.NationName, string(createdHash)).Scan()
+	err = ourTx.QueryRow(r.Context(), "INSERT INTO accounts (account_name, account_pass_hash) VALUES ($1, $2)", newUser.NationName, string(createdHash)).Scan()
 	if err.Error() != "" && err != pgx.ErrNoRows {
 		w.WriteHeader(http.StatusConflict)
 		log.Println("DB Err 3", err)
 		return
 	}
-	err = ourConn.QueryRow(r.Context(), "INSERT INTO nation_permissions (region_name, nation_name, permission) VALUES ($1, $2, 'citizen')", newUser.RegionName, newUser.NationName).Scan()
+	err = ourTx.QueryRow(r.Context(), "INSERT INTO nation_permissions (region_name, nation_name, permission) VALUES ($1, $2, 'citizen')", newUser.RegionName, newUser.NationName).Scan()
 	if err != nil && err != pgx.ErrNoRows {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("DB Err 4", err)
 		return
 	}
+	_, err = loanIssue(r.Context(), &loanFormat{LoanRate: "2.5", Lender: newUser.RegionName, Lendee: newUser.NationName, LentValue: "10000"}, ourTx, fsClient)
 	log.Println("User Created")
 	w.WriteHeader(http.StatusCreated)
 }
@@ -72,39 +72,36 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		return
 	}
 	var dbPassHash string = ""
-	var dbUserRegion string = ""
-	err = dbPool.QueryRow(r.Context(), "SELECT account_pass_hash, region_name FROM accounts, nation_permissions WHERE account_name = $1 AND account_name = nation_name", user.NationName).Scan(&dbPassHash, &dbUserRegion)
+	var userReturn = struct {
+		AuthKey        string `json:"AuthKey"`
+		UserRegion     string `json:"UserRegion"`
+		UserPermission string `json:"UserPermission"`
+		UserName       string `json:"UserName"`
+	}{
+		UserName: user.NationName,
+	}
+	err = dbPool.QueryRow(r.Context(), "SELECT account_pass_hash, region_name, permission FROM accounts, nation_permissions WHERE account_name = $1 AND account_name = nation_name AND account_type = 'nation';", user.NationName).Scan(&dbPassHash, &userReturn.UserRegion, &userReturn.UserPermission)
 	if err != nil {
-		errStr := err.Error()
-		if errStr == pgx.ErrNoRows.Error() {
+		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
 			return
-		} else if errStr != "" {
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Println("DB Err", errStr)
-			return
 		}
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("DB Err", err)
+		return
 	}
 	err = bcrypt.CompareHashAndPassword([]byte(dbPassHash), []byte(user.PasswordString))
 	if err == bcrypt.ErrMismatchedHashAndPassword {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	authKey := md5.Sum([]byte(user.NationName + EXTRA_KEY_STRING))
-	returnValue := struct {
-		AuthKey    string `json:"AuthKey"`
-		UserRegion string `json:"UserRegion"`
-		UserName   string `json:"UserName"`
-	}{
-		UserName:   user.NationName,
-		AuthKey:    hex.EncodeToString(authKey[:]),
-		UserRegion: dbUserRegion,
-	}
+	authKeyHex := md5.Sum([]byte(user.NationName + EXTRA_KEY_STRING))
+	userReturn.AuthKey = string(authKeyHex[:])
 	if err != nil {
 		log.Println("JSON err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	outEncoder.Encode(returnValue)
+	outEncoder.Encode(userReturn)
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -128,7 +125,7 @@ func registerRegion(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool
 		log.Println("DB Err 1", err)
 		return
 	}
-	ret1, _ := ourConn.Query(r.Context(), "INSERT INTO region_accounts (region_name, region_ticker) VALUES ($1, $2)", newRegion.RegionName, newRegion.RegionTicker)
+	ret1, _ := ourConn.Query(r.Context(), "INSERT INTO accounts (account_name, account_type, cash_in_hand) VALUES ($1, $2)", newRegion.RegionName, "region", 1000000)
 	errString := ret1.Scan().Error()
 	if errString != "" && errString != pgx.ErrNoRows.Error() {
 		w.WriteHeader(http.StatusInternalServerError)

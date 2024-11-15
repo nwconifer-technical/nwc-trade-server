@@ -46,7 +46,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 	theMux.HandleFunc("/signup/nation", func(w http.ResponseWriter, r *http.Request) {
-		openPostWrapper(w, r, dbPool, signupFunc)
+		openPostLTWrapper(w, r, dbPool, fsClient, signupFunc)
 	})
 	theMux.HandleFunc("/signup/region", func(w http.ResponseWriter, r *http.Request) {
 		openPostWrapper(w, r, dbPool, registerRegion)
@@ -60,8 +60,20 @@ func main() {
 	theMux.HandleFunc("/cash/details/{natName}", func(w http.ResponseWriter, r *http.Request) {
 		openGetLTWrapper(w, r, dbPool, fsClient, nationCashDetails)
 	})
+	theMux.HandleFunc("/loans/{natName}", func(w http.ResponseWriter, r *http.Request) {
+		securedGetWrapper(w, r, dbPool, getLoans)
+	})
+	theMux.HandleFunc("/loan/{loanId}", func(w http.ResponseWriter, r *http.Request) {
+		securedGetWrapper(w, r, dbPool, getLoan)
+	})
+	theMux.HandleFunc("/loan/issue", func(w http.ResponseWriter, r *http.Request) {
+		securedPostLTWrapper(w, r, dbPool, fsClient, manualLoanIssue)
+	})
 	theMux.HandleFunc("/nation/{natName}", func(w http.ResponseWriter, r *http.Request) {
 		nationInfo(w, r, dbPool)
+	})
+	theMux.HandleFunc("/region/{region}", func(w http.ResponseWriter, r *http.Request) {
+		securedGetLTWrapper(w, r, dbPool, *fsClient, regionInfo)
 	})
 
 	theServer := http.Server{
