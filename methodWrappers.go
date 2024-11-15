@@ -41,7 +41,32 @@ func securedGetWrapper(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.P
 	handle(w, r, dbPool)
 }
 
+func securedGetLTWrapper(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient firestore.Client, handle func(http.ResponseWriter, *http.Request, *pgxpool.Pool, firestore.Client)) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !authKeyVerification(r.Header.Get("AuthKey"), r.Header.Get("NationName")) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	handle(w, r, dbPool, fsClient)
+}
+
 func securedPostLTWrapper(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client, handle func(http.ResponseWriter, *http.Request, *pgxpool.Pool, *firestore.Client)) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if !authKeyVerification(r.Header.Get("AuthKey"), r.Header.Get("NationName")) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	handle(w, r, dbPool, fsClient)
+}
+
+func openPostLTWrapper(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client, handle func(http.ResponseWriter, *http.Request, *pgxpool.Pool, *firestore.Client)) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return

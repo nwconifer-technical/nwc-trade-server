@@ -1,7 +1,7 @@
 CREATE TYPE accountType as ENUM ('region', 'nation');
 
 CREATE TABLE IF NOT EXISTS accounts (
-    account_name TEXT UNIQUE NOT NULL PRIMARY KEY,
+    account_name TEXT UNIQUE NOT NULL PRIMARY KEY ON DELETE CASCADE,
     account_pass_hash TEXT,
     account_type accountType NOT NULL DEFAULT 'nation',
     cash_in_hand NUMERIC NOT NULL DEFAULT 0.0 CHECK(cash_in_hand >= 0.0),
@@ -18,4 +18,13 @@ CREATE TABLE IF NOT EXISTS nation_permissions (
     CONSTRAINT seperateThings CHECK(region_name != nation_name)
 );
 
-INSERT INTO accounts (account_name, account_type cash_in_hand) VALUES ('The Exchange', 'region', 1000000);
+CREATE TABLE IF NOT EXISTS loans (
+    loan_id bigint UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    lendee TEXT NOT NULL REFERENCES accounts(account_name),
+    lender TEXT NOT NULL REFERENCES accounts(account_name),
+    lent_value NUMERIC NOT NULL CHECK(lent_value >= 0.0),
+    rate NUMERIC NOT NULL,
+    current_value NUMERIC NOT NULL
+);
+
+INSERT INTO accounts (account_name, account_type, cash_in_hand) VALUES ('New West Conifer', 'region', 1000000);
