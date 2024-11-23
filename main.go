@@ -46,12 +46,13 @@ func main() {
 	theMux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Pinged")
 		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Pong"))
 	})
 	theMux.HandleFunc("/signup/nation", func(w http.ResponseWriter, r *http.Request) {
 		openPostLTWrapper(w, r, dbPool, fsClient, signupFunc)
 	})
 	theMux.HandleFunc("/signup/region", func(w http.ResponseWriter, r *http.Request) {
-		openPostWrapper(w, r, dbPool, registerRegion)
+		securedPostWrapper(w, r, dbPool, registerRegion)
 	})
 	theMux.HandleFunc("/verify/nation", func(w http.ResponseWriter, r *http.Request) {
 		openPostWrapper(w, r, dbPool, userVerification)

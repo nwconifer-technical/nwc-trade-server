@@ -10,6 +10,7 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/api/iterator"
 )
 
 type transactionFormat struct {
@@ -66,4 +67,40 @@ func handCashTransaction(transaction *transactionFormat, ctx context.Context, db
 	}
 	_, _, err = fsClient.Collection(CASH_TRANSACT_COLL).Add(ctx, transaction)
 	return err
+}
+
+func getUserCashTransactions(ctx context.Context, fsClient firestore.Client, user string) ([]transactionFormat, error) {
+	var cashTransacts []transactionFormat
+	documents := fsClient.Collection(CASH_TRANSACT_COLL).WhereEntity(firestore.OrFilter{
+		Filters: []firestore.EntityFilter{
+			firestore.PropertyFilter{
+				Path:     "sender",
+				Operator: "==",
+				Value:    user,
+			},
+			firestore.PropertyFilter{
+				Path:     "receiver",
+				Operator: "==",
+				Value:    user,
+			},
+		},
+	}).OrderBy("timestamp", firestore.Desc).Limit(25).Documents(ctx)
+	for {
+		docu, err := documents.Next()
+		if err != nil {
+			if err == iterator.Done {
+				break
+			}
+			log.Println("FS Err", err)
+			return nil, err
+		}
+		var thisTransact transactionFormat
+		err = docu.DataTo(&thisTransact)
+		if err != nil {
+			log.Println("Docu Err", err)
+			return nil, err
+		}
+		cashTransacts = append(cashTransacts, thisTransact)
+	}
+	return cashTransacts, nil
 }

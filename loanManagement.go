@@ -61,7 +61,7 @@ func manualLoanIssue(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Poo
 func loanIssue(ctx context.Context, theLoan *loanFormat, dbTx pgx.Tx, fsClient *firestore.Client) (string, error) {
 	log.Println("Loan Issuance")
 	var theId string
-	err := dbTx.QueryRow(ctx, `INSERT INTO loans (lendee, lender, lent_value, rate, current_value) VALUES ($1, $2, $3, $4, $5) RETURNING loan_id;`, theLoan.Lendee, theLoan.Lender, theLoan.LentValue, theLoan.LoanRate, theLoan.CurrentValue).Scan(&theId)
+	err := dbTx.QueryRow(ctx, `INSERT INTO loans (lendee, lender, lent_value, rate, current_value) VALUES ($1, $2, $3, $4, $5) RETURNING loan_id;`, theLoan.Lendee, theLoan.Lender, theLoan.LentValue, theLoan.LoanRate, theLoan.LentValue).Scan(&theId)
 	if err != nil {
 		return "", err
 	}
