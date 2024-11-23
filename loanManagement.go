@@ -118,9 +118,9 @@ func getLoans(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 	}
 	w.WriteHeader(http.StatusOK)
 	encoder.Encode(struct {
-		yourLoans []loanFormat `json:"yourLoans"`
+		YourLoans []loanFormat `json:"yourLoans"`
 	}{
-		yourLoans: theLoans,
+		YourLoans: theLoans,
 	})
 }
 
