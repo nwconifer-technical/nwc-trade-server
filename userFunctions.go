@@ -199,5 +199,6 @@ func nationCashDetails(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.P
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 	encoder.Encode(theReturn)
 }

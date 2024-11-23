@@ -139,7 +139,6 @@ func getAccountLoans(ctx context.Context, dbConn *pgxpool.Conn, accountName stri
 		if rowError != nil {
 			return nil, rowError
 		}
-		log.Println(thisLoan.LoanRate)
 		returnArray = append(returnArray, thisLoan)
 	}
 	return returnArray, nil

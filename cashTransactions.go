@@ -37,6 +37,38 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	var accountType string
+	err = dbTx.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, sentThing.Sender).Scan(&accountType)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Println("DB 0 Err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if accountType == "nation" && sentThing.Sender != r.Header.Get("NationName") {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if accountType == "region" {
+		var permLevel string
+		err = dbTx.QueryRow(r.Context(), `SELECT permission FROM nation_permissions WHERE region_name = $1 AND nation_name = $2`, sentThing.Sender, r.Header.Get("NationName")).Scan(&permLevel)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Println("DB Error", err)
+			return
+		}
+		if permLevel != "trader" && permLevel != "admin" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	}
 	if err = handCashTransaction(sentThing, r.Context(), dbTx, fsClient); err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -48,6 +80,7 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	}
 	err = dbTx.Commit(r.Context())
 	if err != nil {
+		log.Println("Commit Error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
