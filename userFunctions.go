@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -102,7 +103,7 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		return
 	}
 	authKeyHex := md5.Sum([]byte(user.NationName + EXTRA_KEY_STRING))
-	userReturn.AuthKey = string(authKeyHex[:])
+	userReturn.AuthKey = hex.EncodeToString(authKeyHex[:])
 	if err != nil {
 		log.Println("JSON err", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -126,6 +127,7 @@ func registerRegion(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool
 		return
 	}
 	ourConn, err := dbPool.Begin(r.Context())
+	defer ourConn.Rollback(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("DB Err 1", err)

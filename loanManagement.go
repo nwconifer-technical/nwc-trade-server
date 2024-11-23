@@ -56,7 +56,6 @@ func manualLoanIssue(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Poo
 	}{
 		loanId: theLoan.LoanId,
 	})
-
 }
 
 func loanIssue(ctx context.Context, theLoan *loanFormat, dbTx pgx.Tx, fsClient *firestore.Client) (string, error) {
