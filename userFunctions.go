@@ -32,7 +32,7 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fs
 		log.Println("DB Err 0", err)
 	}
 	err = decoder.Decode(&newUser)
-	log.Println("NewUser Signup Request", newUser)
+	log.Println("NewUser Signup Request")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Println("JSON Err 1", err)
@@ -59,6 +59,7 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fs
 		return
 	}
 	log.Println("User Created")
+	ourTx.Commit(r.Context())
 	w.WriteHeader(http.StatusCreated)
 }
 
