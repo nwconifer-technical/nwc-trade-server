@@ -60,7 +60,7 @@ func main() {
 	theMux.HandleFunc("/cash/details/{natName}", func(w http.ResponseWriter, r *http.Request) {
 		openGetLTWrapper(w, r, dbPool, fsClient, nationCashDetails)
 	})
-	theMux.HandleFunc("/loans/{natName}", func(w http.ResponseWriter, r *http.Request) {
+	theMux.HandleFunc("/loans", func(w http.ResponseWriter, r *http.Request) {
 		securedGetWrapper(w, r, dbPool, getLoans)
 	})
 	theMux.HandleFunc("/loan/{loanId}", func(w http.ResponseWriter, r *http.Request) {

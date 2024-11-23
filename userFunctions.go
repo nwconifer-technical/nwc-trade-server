@@ -52,7 +52,12 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fs
 		log.Println("DB Err 4", err)
 		return
 	}
-	_, err = loanIssue(r.Context(), &loanFormat{LoanRate: "2.5", Lender: newUser.RegionName, Lendee: newUser.NationName, LentValue: "10000"}, ourTx, fsClient)
+	_, err = loanIssue(r.Context(), &loanFormat{LoanRate: 2.5, Lender: newUser.RegionName, Lendee: newUser.NationName, LentValue: 10000}, ourTx, fsClient)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Loan Err", err)
+		return
+	}
 	log.Println("User Created")
 	w.WriteHeader(http.StatusCreated)
 }
@@ -151,7 +156,7 @@ func nationInfo(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 	}{}
 	requedNat := r.PathValue("natName")
 	log.Println("Nation info requested for", requedNat)
-	err := dbPool.QueryRow(r.Context(), "SELECT account_name, nation_permissions.region_name, cash_in_hand, cash_in_escrow FROM accounts, nation_permissions WHERE nation_name = $1 AND nation_permissions.nation_name = nation_permissions.region_name;", requedNat).Scan(&returnHello.NationName, &returnHello.Region, &returnHello.CashInHand, &returnHello.CashInEscrow)
+	err := dbPool.QueryRow(r.Context(), "SELECT account_name, nation_permissions.region_name, cash_in_hand, cash_in_escrow FROM accounts, nation_permissions WHERE nation_name = $1 AND nation_permissions.nation_name = accounts.account_name;", requedNat).Scan(&returnHello.NationName, &returnHello.Region, &returnHello.CashInHand, &returnHello.CashInEscrow)
 	if err == pgx.ErrNoRows {
 		w.WriteHeader(http.StatusNotFound)
 		return

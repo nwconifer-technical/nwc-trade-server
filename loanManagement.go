@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 
 	"cloud.google.com/go/firestore"
 	"github.com/jackc/pgx/v5"
@@ -13,12 +12,12 @@ import (
 )
 
 type loanFormat struct {
-	LoanId       string `json:"id,omitempty"`
-	Lender       string `json:"lender"`                 // The person issuing the loan
-	Lendee       string `json:"lendee"`                 // The person receiving the loan
-	LentValue    string `json:"lentValue"`              // The value lent out
-	LoanRate     string `json:"loanRate"`               // The loan interest rate
-	CurrentValue string `json:"currentValue,omitempty"` // The current value of the loan, basically LentValue + interest - repayments
+	LoanId       string  `json:"id,omitempty"`
+	Lender       string  `json:"lender"`                 // The person issuing the loan
+	Lendee       string  `json:"lendee"`                 // The person receiving the loan
+	LentValue    float32 `json:"lentValue"`              // The value lent out
+	LoanRate     float32 `json:"loanRate"`               // The loan interest rate
+	CurrentValue float32 `json:"currentValue,omitempty"` // The current value of the loan, basically LentValue + interest - repayments
 }
 
 func manualLoanIssue(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client) {
@@ -63,10 +62,7 @@ func manualLoanIssue(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Poo
 func loanIssue(ctx context.Context, theLoan *loanFormat, dbTx pgx.Tx, fsClient *firestore.Client) (string, error) {
 	log.Println("Loan Issuance")
 	var theId string
-	lentVal, _ := strconv.ParseFloat(theLoan.LentValue, 64)
-	loanRate, _ := strconv.ParseFloat(theLoan.LoanRate, 64)
-	curVal, _ := strconv.ParseFloat(theLoan.CurrentValue, 64)
-	err := dbTx.QueryRow(ctx, `INSERT INTO loans (lendee, lender, lent_value, rate, current_value) VALUES ($1, $2, $3, $4, $5) RETURNING loan_id;`, theLoan.Lendee, theLoan.Lender, lentVal, loanRate, curVal).Scan(&theId)
+	err := dbTx.QueryRow(ctx, `INSERT INTO loans (lendee, lender, lent_value, rate, current_value) VALUES ($1, $2, $3, $4, $5) RETURNING loan_id;`, theLoan.Lendee, theLoan.Lender, theLoan.LentValue, theLoan.LoanRate, theLoan.CurrentValue).Scan(&theId)
 	if err != nil {
 		return "", err
 	}
@@ -104,12 +100,8 @@ func getLoan(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 
 func getLoans(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 	log.Println("Loans Get")
-	requedNat := r.PathValue("natName")
+	requedNat := r.Header.Get("NationName")
 	encoder := json.NewEncoder(w)
-	if requedNat != r.Header.Get("NationName") {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
 	dbConn, err := dbPool.Acquire(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -125,8 +117,9 @@ func getLoans(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 	encoder.Encode(struct {
-		yourLoans []loanFormat
+		yourLoans []loanFormat `json:"yourLoans"`
 	}{
 		yourLoans: theLoans,
 	})

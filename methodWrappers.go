@@ -71,10 +71,10 @@ func openPostLTWrapper(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.P
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if !authKeyVerification(r.Header.Get("AuthKey"), r.Header.Get("NationName")) {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
+	// if !authKeyVerification(r.Header.Get("AuthKey"), r.Header.Get("NationName")) {
+	// 	w.WriteHeader(http.StatusForbidden)
+	// 	return
+	// }
 	handle(w, r, dbPool, fsClient)
 }
 

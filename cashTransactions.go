@@ -16,7 +16,7 @@ type transactionFormat struct {
 	Timecode time.Time `firestore:"timestamp" json:"timecode,omitempty"`
 	Sender   string    `firestore:"sender" json:"sender"`
 	Receiver string    `firestore:"receiver" json:"receiver"`
-	Value    string    `firestore:"value" json:"value"`
+	Value    float32   `firestore:"value" json:"value"`
 	Message  string    `firestoe:"message,omitempty" json:"message"`
 }
 
