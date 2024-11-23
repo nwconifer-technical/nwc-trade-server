@@ -75,6 +75,36 @@ func main() {
 	theMux.HandleFunc("/region/{region}", func(w http.ResponseWriter, r *http.Request) {
 		securedGetLTWrapper(w, r, dbPool, *fsClient, regionInfo)
 	})
+	theMux.HandleFunc("/list/nations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		headEncoder := json.NewEncoder(w)
+		dbRows, err := dbPool.Query(r.Context(), `SELECT account_name FROM accounts WHERE account_type = 'nation' ORDER BY cash_in_hand DESC LIMIT 25;`)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		objToRet := struct {
+			Nations []string
+		}{}
+		for {
+			newRow := dbRows.Next()
+			if !newRow {
+				break
+			}
+			var currNat string
+			err = dbRows.Scan(&currNat)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			objToRet.Nations = append(objToRet.Nations, currNat)
+		}
+		headEncoder.Encode(objToRet)
+	})
 
 	theServer := http.Server{
 		Addr:        `:8080`,
