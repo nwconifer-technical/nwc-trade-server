@@ -113,43 +113,6 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	outEncoder.Encode(userReturn)
 }
 
-func registerRegion(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
-	log.Println("Region Signup Request")
-	decoder := json.NewDecoder(r.Body)
-	var newRegion struct {
-		RegionName   string
-		RegionTicker string
-	}
-	var err error
-	err = decoder.Decode(&newRegion)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("JSON Err", err)
-		return
-	}
-	ourConn, err := dbPool.Begin(r.Context())
-	defer ourConn.Rollback(r.Context())
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("DB Err 1", err)
-		return
-	}
-	ret1, _ := ourConn.Query(r.Context(), "INSERT INTO accounts (account_name, account_type, cash_in_hand) VALUES ($1, $2)", newRegion.RegionName, "region", 1000000)
-	errString := ret1.Scan().Error()
-	if errString != "" && errString != pgx.ErrNoRows.Error() {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Print("DB Err 2", ret1.Err())
-		return
-	}
-	err = ourConn.Commit(r.Context())
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("TX Error", err)
-		return
-	}
-	w.WriteHeader(http.StatusCreated)
-}
-
 func nationInfo(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 	respEncoder := json.NewEncoder(w)
 	returnHello := struct {

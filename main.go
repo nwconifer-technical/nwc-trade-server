@@ -44,7 +44,6 @@ func main() {
 		w.Write([]byte("Hello!"))
 	})
 	theMux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Pinged")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Pong"))
 	})
@@ -108,7 +107,9 @@ func main() {
 		}
 		headEncoder.Encode(objToRet)
 	})
-
+	theMux.HandleFunc("/shares/quote/{ticker}", func(w http.ResponseWriter, r *http.Request) {
+		marketQuote(w, r, dbPool)
+	})
 	theServer := http.Server{
 		Addr:        `:8080`,
 		Handler:     theMux,
