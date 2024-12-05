@@ -19,3 +19,15 @@ steps:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+availableSecrets:
+  secretManager:
+    - versionName: projects/335883769512/secrets/CASH_TRANSACT_COLL/versions/2
+      env: "CASH_TRANSACT_COLL"
+    - versionName: projects/335883769512/secrets/DB_CONNECTSTRING/versions/1
+      env: "DB_CONNECTSTRING"
+    - versionName: projects/335883769512/secrets/EXTRA_KEY_STRING/versions/1
+      env: "EXTRA_KEY_STRING"
+    - versionName: projects/335883769512/secrets/FIRESTORE_DB/versions/1
+      env: "FIRESTORE_DB"
+    - versionName: projects/335883769512/secrets/HASH_COST/versions/1
+      env: "HASH_COST"

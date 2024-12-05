@@ -4,6 +4,7 @@ go 1.22.2
 
 require (
 	cloud.google.com/go/firestore v1.17.0
+	github.com/gosimple/slug v1.14.0
 	github.com/jackc/pgx/v5 v5.7.1
 	golang.org/x/crypto v0.28.0
 	google.golang.org/api v0.203.0
@@ -22,7 +23,6 @@ require (
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
-	github.com/gosimple/slug v1.14.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

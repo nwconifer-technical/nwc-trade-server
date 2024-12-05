@@ -10,7 +10,6 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func createShares(ctx context.Context, dbTx pgx.Tx, region string, numberofShares int) error {
@@ -99,14 +98,15 @@ func buildMarketCap(region string) (float32, error) {
 type Quote struct {
 	Ticker      string  `json:"ticker"`
 	MarketPrice float32 `json:"marketPrice"`
+	TotalVolume int     `json:"totalVolume"`
 }
 
-func marketQuote(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
+func (Env env) marketQuote(w http.ResponseWriter, r *http.Request) {
 	sendingQuote := Quote{
 		Ticker: r.PathValue("ticker"),
 	}
 	theEncoder := json.NewEncoder(w)
-	err := dbPool.QueryRow(r.Context(), `SELECT share_price FROM stocks WHERE ticker = $1`, sendingQuote.Ticker).Scan(&sendingQuote.MarketPrice)
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT share_price, total_share_volume FROM stocks WHERE ticker = $1`, sendingQuote.Ticker).Scan(&sendingQuote.MarketPrice, &sendingQuote.TotalVolume)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -116,4 +116,76 @@ func marketQuote(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 		return
 	}
 	theEncoder.Encode(sendingQuote)
+}
+
+type shareTransfer struct {
+	Ticker   string  `json:"ticker"`
+	Sender   string  `json:"sender"`
+	Receiver string  `json:"receiver"`
+	Quantity int     `json:"quantity"`
+	AvgPrice float32 `json:"avgprice"`
+}
+
+func (Env env) manualShareTransfer(w http.ResponseWriter, r *http.Request) {
+	log.Println("Share Transfer Occurring")
+	decoder := json.NewDecoder(r.Body)
+	var sentThing shareTransfer
+	err := decoder.Decode(&sentThing)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		log.Println("JSON Err", err)
+		return
+	}
+	if sentThing.Sender != r.Header.Get("NationName") {
+		log.Println("Auth Err", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	dbTx, err := Env.DBPool.Begin(r.Context())
+	if err != nil {
+		log.Println("Tx Err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if err = transferShares(r.Context(), dbTx, sentThing); err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			return
+		}
+		log.Println("DB Err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = dbTx.Commit(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func transferShares(ctx context.Context, dbTx pgx.Tx, transfer shareTransfer) error {
+	var currentSenderQuantity int
+	err := dbTx.QueryRow(ctx, `SELECT share_quant FROM stock_holdings WHERE ticker = $1 AND account_name = $2`, transfer.Ticker, transfer.Sender).Scan(&currentSenderQuantity)
+	log.Println(currentSenderQuantity)
+	if err != nil {
+		log.Println("Weird Issue", err)
+		return err
+	}
+	if currentSenderQuantity-transfer.Quantity < 0 {
+		log.Println("Unprocessable")
+		return pgx.ErrNoRows
+	}
+	err = dbTx.QueryRow(ctx,
+		// `INSERT INTO stock_holdings (ticker, account_name, share_quant, avg_price) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker, account_name) DO UPDATE SET share_quant = stock_holdings.share_quant + EXCLUDED.share_quant, avg_price = stock_holdings.avg_price + ((EXCLUDED.avg_price - stock_holdings.avg_price) * (stock_holdings.share_quant / EXCLUDED.share_quant));`,
+		`INSERT INTO stock_holdings (ticker, account_name, share_quant, avg_price) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker, account_name) DO UPDATE SET share_quant = stock_holdings.share_quant + EXCLUDED.share_quant;`,
+		transfer.Ticker, transfer.Receiver, transfer.Quantity, transfer.AvgPrice).Scan()
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	err = dbTx.QueryRow(ctx, `UPDATE stock_holdings SET share_quant = stock_holdings.share_quant - $3 WHERE ticker = $1 AND account_name = $2;`, transfer.Ticker, transfer.Sender, transfer.Quantity).Scan()
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	return nil
 }

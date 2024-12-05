@@ -9,7 +9,6 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/api/iterator"
 )
 
@@ -21,7 +20,7 @@ type transactionFormat struct {
 	Message  string    `firestoe:"message,omitempty" json:"message"`
 }
 
-func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client) {
+func (Env env) outerCashHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Cash Transaction Occurring")
 	decoder := json.NewDecoder(r.Body)
 	var sentThing *transactionFormat
@@ -31,7 +30,7 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		log.Println("JSON Err", err)
 		return
 	}
-	dbTx, err := dbPool.Begin(r.Context())
+	dbTx, err := Env.DBPool.Begin(r.Context())
 	defer dbTx.Rollback(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -69,7 +68,7 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 			return
 		}
 	}
-	if err = handCashTransaction(sentThing, r.Context(), dbTx, fsClient); err != nil {
+	if err = Env.handCashTransaction(sentThing, r.Context(), dbTx); err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -87,7 +86,7 @@ func outerCashHandler(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	w.WriteHeader(http.StatusOK)
 }
 
-func handCashTransaction(transaction *transactionFormat, ctx context.Context, dbTx pgx.Tx, fsClient *firestore.Client) error {
+func (Env env) handCashTransaction(transaction *transactionFormat, ctx context.Context, dbTx pgx.Tx) error {
 	transaction.Timecode = time.Now()
 	var err error
 	err = dbTx.QueryRow(ctx, `UPDATE accounts SET cash_in_hand = cash_in_hand - $1 WHERE account_name = $2`, transaction.Value, transaction.Sender).Scan()
@@ -98,13 +97,13 @@ func handCashTransaction(transaction *transactionFormat, ctx context.Context, db
 	if err != pgx.ErrNoRows {
 		return err
 	}
-	_, _, err = fsClient.Collection(CASH_TRANSACT_COLL).Add(ctx, transaction)
+	_, _, err = Env.FSClient.Collection(Env.CashCollection).Add(ctx, transaction)
 	return err
 }
 
-func getUserCashTransactions(ctx context.Context, fsClient firestore.Client, user string) ([]transactionFormat, error) {
+func (Env env) getUserCashTransactions(ctx context.Context, user string) ([]transactionFormat, error) {
 	var cashTransacts []transactionFormat
-	documents := fsClient.Collection(CASH_TRANSACT_COLL).WhereEntity(firestore.OrFilter{
+	documents := Env.FSClient.Collection(Env.CashCollection).WhereEntity(firestore.OrFilter{
 		Filters: []firestore.EntityFilter{
 			firestore.PropertyFilter{
 				Path:     "sender",

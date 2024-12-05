@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
+	"strconv"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -13,17 +13,35 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var CASH_TRANSACT_COLL = os.Getenv("CASH_TRANSACT_COLL")
-
 // postgres://postgres:hellofrend@104.198.238.223:5432/nwc_am_db?pool_min_conns=1&pool_max_conns=10
+
+var HashCost,
+	DbString,
+	ProjId,
+	ExtraKeyString,
+	FirestoreString string
+
+type env struct {
+	DBPool         *pgxpool.Pool
+	FSClient       *firestore.Client
+	CashCollection string
+	HashCost       int
+	KeyString      string
+}
 
 func main() {
 	primCtx := context.Background()
-	dbPool, err := pgxpool.New(primCtx, os.Getenv("DB_CONNECTSTRING"))
+	var primaryEnv env = env{
+		CashCollection: "cashTransactions",
+		KeyString:      ExtraKeyString,
+	}
+	var err error
+	primaryEnv.HashCost, _ = strconv.Atoi(HashCost)
+	primaryEnv.DBPool, err = pgxpool.New(primCtx, DbString)
 	if err != nil {
 		log.Fatal(err)
 	}
-	testConn, err := dbPool.Acquire(primCtx)
+	testConn, err := primaryEnv.DBPool.Acquire(primCtx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -32,12 +50,19 @@ func main() {
 		log.Fatal(err)
 	}
 	testConn.Release()
-	defer dbPool.Close()
-	fsClient, err := firestore.NewClientWithDatabase(primCtx, os.Getenv("PROJECT_ID"), os.Getenv("FIRESTORE_DB"))
+	defer primaryEnv.DBPool.Close()
+	primaryEnv.FSClient, err = firestore.NewClientWithDatabase(primCtx, ProjId, FirestoreString)
 	if err != nil {
 		log.Panic(err)
 	}
-	defer fsClient.Close()
+	defer primaryEnv.FSClient.Close()
+	// var primaryEnv = env{
+	// 	CashCollection: os.Getenv("CASH_TRANSACT_COLL"),
+	// 	HashCost:       hashCost,
+	// 	KeyString:      os.Getenv("EXTRA_KEY_STRING"),
+	// 	DBPool:         dbPool,
+	// 	FSClient:       fsClient,
+	// }
 
 	theMux := http.NewServeMux()
 	theMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -48,39 +73,39 @@ func main() {
 		w.Write([]byte("Pong"))
 	})
 	theMux.HandleFunc("/signup/nation", func(w http.ResponseWriter, r *http.Request) {
-		openPostLTWrapper(w, r, dbPool, fsClient, signupFunc)
+		openPostWrapper(w, r, primaryEnv.signupFunc)
 	})
 	theMux.HandleFunc("/signup/region", func(w http.ResponseWriter, r *http.Request) {
-		securedPostWrapper(w, r, dbPool, registerRegion)
+		primaryEnv.securedPostWrapper(w, r, primaryEnv.registerRegion)
 	})
 	theMux.HandleFunc("/verify/nation", func(w http.ResponseWriter, r *http.Request) {
-		openPostWrapper(w, r, dbPool, userVerification)
+		openPostWrapper(w, r, primaryEnv.userVerification)
 	})
 	theMux.HandleFunc("/cash/transaction", func(w http.ResponseWriter, r *http.Request) {
-		securedPostLTWrapper(w, r, dbPool, fsClient, outerCashHandler)
+		primaryEnv.securedPostWrapper(w, r, primaryEnv.outerCashHandler)
 	})
 	theMux.HandleFunc("/cash/details/{natName}", func(w http.ResponseWriter, r *http.Request) {
-		openGetLTWrapper(w, r, dbPool, fsClient, nationCashDetails)
+		primaryEnv.nationCashDetails(w, r)
 	})
 	theMux.HandleFunc("/loans", func(w http.ResponseWriter, r *http.Request) {
-		securedGetWrapper(w, r, dbPool, getLoans)
+		primaryEnv.securedGetWrapper(w, r, primaryEnv.getLoans)
 	})
 	theMux.HandleFunc("/loan/{loanId}", func(w http.ResponseWriter, r *http.Request) {
-		securedGetWrapper(w, r, dbPool, getLoan)
+		primaryEnv.securedGetWrapper(w, r, primaryEnv.getLoan)
 	})
 	theMux.HandleFunc("/loan/issue", func(w http.ResponseWriter, r *http.Request) {
-		securedPostLTWrapper(w, r, dbPool, fsClient, manualLoanIssue)
+		primaryEnv.securedPostWrapper(w, r, primaryEnv.manualLoanIssue)
 	})
 	theMux.HandleFunc("/nation/{natName}", func(w http.ResponseWriter, r *http.Request) {
-		nationInfo(w, r, dbPool)
+		primaryEnv.nationInfo(w, r)
 	})
 	theMux.HandleFunc("/region/{region}", func(w http.ResponseWriter, r *http.Request) {
-		securedGetLTWrapper(w, r, dbPool, *fsClient, regionInfo)
+		primaryEnv.securedGetWrapper(w, r, primaryEnv.regionInfo)
 	})
 	theMux.HandleFunc("/list/nations", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		headEncoder := json.NewEncoder(w)
-		dbRows, err := dbPool.Query(r.Context(), `SELECT account_name FROM accounts WHERE account_type = 'nation' ORDER BY cash_in_hand DESC LIMIT 25;`)
+		dbRows, err := primaryEnv.DBPool.Query(r.Context(), `SELECT account_name FROM accounts WHERE account_type = 'nation' ORDER BY cash_in_hand DESC LIMIT 25;`)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				w.WriteHeader(http.StatusNotFound)
@@ -108,7 +133,13 @@ func main() {
 		headEncoder.Encode(objToRet)
 	})
 	theMux.HandleFunc("/shares/quote/{ticker}", func(w http.ResponseWriter, r *http.Request) {
-		marketQuote(w, r, dbPool)
+		primaryEnv.marketQuote(w, r)
+	})
+	theMux.HandleFunc("/shares/transfer", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedPostWrapper(w, r, primaryEnv.manualShareTransfer)
+	})
+	theMux.HandleFunc("/shares/trade", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedPostWrapper(w, r, primaryEnv.openTrade)
 	})
 	theServer := http.Server{
 		Addr:        `:8080`,

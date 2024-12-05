@@ -5,12 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"cloud.google.com/go/firestore"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func registerRegion(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
+func (Env env) registerRegion(w http.ResponseWriter, r *http.Request) {
 	log.Println("Region Signup Request")
 	decoder := json.NewDecoder(r.Body)
 	var newRegion struct {
@@ -24,7 +22,7 @@ func registerRegion(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool
 		log.Println("JSON Err", err)
 		return
 	}
-	ourConn, err := dbPool.Begin(r.Context())
+	ourConn, err := Env.DBPool.Begin(r.Context())
 	defer ourConn.Rollback(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -64,7 +62,7 @@ func registerRegion(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool
 	w.WriteHeader(http.StatusCreated)
 }
 
-func regionInfo(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient firestore.Client) {
+func (Env env) regionInfo(w http.ResponseWriter, r *http.Request) {
 	returnObject := struct {
 		RegionName    string
 		HandValue     float32
@@ -75,7 +73,7 @@ func regionInfo(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fs
 	encoder := json.NewEncoder(w)
 	requingNation := r.Header.Get("NationName")
 	regionToRet := r.PathValue("region")
-	theConn, err := dbPool.Acquire(r.Context())
+	theConn, err := Env.DBPool.Acquire(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("DB Err", err)
@@ -92,7 +90,7 @@ func regionInfo(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fs
 		log.Println("Query1 Err", err)
 		return
 	}
-	returnObject.CashTransacts, err = getUserCashTransactions(r.Context(), fsClient, regionToRet)
+	returnObject.CashTransacts, err = Env.getUserCashTransactions(r.Context(), regionToRet)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

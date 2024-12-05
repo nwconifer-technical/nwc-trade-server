@@ -6,26 +6,19 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
-	"strconv"
 
-	"cloud.google.com/go/firestore"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
-var HASH_COST, _ = strconv.Atoi(os.Getenv("HASH_COST"))
-var EXTRA_KEY_STRING = os.Getenv("EXTRA_KEY_STRING")
-
-func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client) {
+func (Env env) signupFunc(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var newUser struct {
 		NationName     string `json:"NationName"`
 		PasswordString string `json:"PasswordString"`
 		RegionName     string `json:"RegionName"`
 	}
-	ourTx, err := dbPool.Begin(r.Context())
+	ourTx, err := Env.DBPool.Begin(r.Context())
 	defer ourTx.Rollback(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -39,7 +32,7 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fs
 		return
 	}
 	log.Println("Bcrypt started")
-	createdHash, _ := bcrypt.GenerateFromPassword([]byte(newUser.PasswordString), HASH_COST)
+	createdHash, _ := bcrypt.GenerateFromPassword([]byte(newUser.PasswordString), Env.HashCost)
 	err = ourTx.QueryRow(r.Context(), "INSERT INTO accounts (account_name, account_pass_hash) VALUES ($1, $2)", newUser.NationName, string(createdHash)).Scan()
 	if err.Error() != "" && err != pgx.ErrNoRows {
 		w.WriteHeader(http.StatusConflict)
@@ -52,7 +45,7 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fs
 		log.Println("DB Err 4", err)
 		return
 	}
-	_, err = loanIssue(r.Context(), &loanFormat{LoanRate: 2.5, Lender: newUser.RegionName, Lendee: newUser.NationName, LentValue: 10000}, ourTx, fsClient)
+	_, err = Env.loanIssue(r.Context(), &loanFormat{LoanRate: 2.5, Lender: newUser.RegionName, Lendee: newUser.NationName, LentValue: 10000}, ourTx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Loan Err", err)
@@ -63,7 +56,7 @@ func signupFunc(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fs
 	w.WriteHeader(http.StatusCreated)
 }
 
-func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
+func (Env env) userVerification(w http.ResponseWriter, r *http.Request) {
 	log.Println("User Verification Request")
 	decoder := json.NewDecoder(r.Body)
 	outEncoder := json.NewEncoder(w)
@@ -86,7 +79,7 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	}{
 		UserName: user.NationName,
 	}
-	err = dbPool.QueryRow(r.Context(), "SELECT account_pass_hash, region_name, permission FROM accounts, nation_permissions WHERE account_name = $1 AND account_name = nation_name AND account_type = 'nation';", user.NationName).Scan(&dbPassHash, &userReturn.UserRegion, &userReturn.UserPermission)
+	err = Env.DBPool.QueryRow(r.Context(), "SELECT account_pass_hash, region_name, permission FROM accounts, nation_permissions WHERE account_name = $1 AND account_name = nation_name AND account_type = 'nation';", user.NationName).Scan(&dbPassHash, &userReturn.UserRegion, &userReturn.UserPermission)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -104,7 +97,7 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	authKeyHex := md5.Sum([]byte(user.NationName + EXTRA_KEY_STRING))
+	authKeyHex := md5.Sum([]byte(user.NationName + Env.KeyString))
 	userReturn.AuthKey = hex.EncodeToString(authKeyHex[:])
 	if err != nil {
 		log.Println("JSON err", err)
@@ -113,7 +106,7 @@ func userVerification(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Po
 	outEncoder.Encode(userReturn)
 }
 
-func nationInfo(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
+func (Env env) nationInfo(w http.ResponseWriter, r *http.Request) {
 	respEncoder := json.NewEncoder(w)
 	returnHello := struct {
 		NationName   string
@@ -123,7 +116,7 @@ func nationInfo(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 	}{}
 	requedNat := r.PathValue("natName")
 	log.Println("Nation info requested for", requedNat)
-	err := dbPool.QueryRow(r.Context(), "SELECT account_name, nation_permissions.region_name, cash_in_hand, cash_in_escrow FROM accounts, nation_permissions WHERE nation_name = $1 AND nation_permissions.nation_name = accounts.account_name;", requedNat).Scan(&returnHello.NationName, &returnHello.Region, &returnHello.CashInHand, &returnHello.CashInEscrow)
+	err := Env.DBPool.QueryRow(r.Context(), "SELECT account_name, nation_permissions.region_name, cash_in_hand, cash_in_escrow FROM accounts, nation_permissions WHERE nation_name = $1 AND nation_permissions.nation_name = accounts.account_name;", requedNat).Scan(&returnHello.NationName, &returnHello.Region, &returnHello.CashInHand, &returnHello.CashInEscrow)
 	if err == pgx.ErrNoRows {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -143,12 +136,12 @@ type cashReturn struct {
 	Transactions []transactionFormat `json:"transactions"`
 }
 
-func nationCashDetails(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client) {
+func (Env env) nationCashDetails(w http.ResponseWriter, r *http.Request) {
 	log.Println("Requested cash details")
 	encoder := json.NewEncoder(w)
 	theReturn := cashReturn{}
 	theNation := r.PathValue("natName")
-	err := dbPool.QueryRow(r.Context(), `SELECT cash_in_hand, cash_in_escrow FROM accounts WHERE account_name = $1;`, theNation).Scan(&theReturn.CashInHand, &theReturn.CashInEscrow)
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT cash_in_hand, cash_in_escrow FROM accounts WHERE account_name = $1;`, theNation).Scan(&theReturn.CashInHand, &theReturn.CashInEscrow)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -157,7 +150,7 @@ func nationCashDetails(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.P
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	theReturn.Transactions, err = getUserCashTransactions(r.Context(), *fsClient, theNation)
+	theReturn.Transactions, err = Env.getUserCashTransactions(r.Context(), theNation)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

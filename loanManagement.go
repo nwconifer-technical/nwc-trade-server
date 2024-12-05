@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 
-	"cloud.google.com/go/firestore"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -20,7 +19,7 @@ type loanFormat struct {
 	CurrentValue float32 `json:"currentValue,omitempty"` // The current value of the loan, basically LentValue + interest - repayments
 }
 
-func manualLoanIssue(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool, fsClient *firestore.Client) {
+func (Env env) manualLoanIssue(w http.ResponseWriter, r *http.Request) {
 	log.Println("Manual Loan Issuance")
 	decoder := json.NewDecoder(r.Body)
 	encoder := json.NewEncoder(w)
@@ -32,13 +31,13 @@ func manualLoanIssue(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Poo
 		return
 	}
 	theLoan.CurrentValue = theLoan.LentValue
-	dbTx, err := dbPool.Begin(r.Context())
+	dbTx, err := Env.DBPool.Begin(r.Context())
 	defer dbTx.Rollback(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	theLoan.LoanId, err = loanIssue(r.Context(), &theLoan, dbTx, fsClient)
+	theLoan.LoanId, err = Env.loanIssue(r.Context(), &theLoan, dbTx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Loan Err", err)
@@ -58,7 +57,7 @@ func manualLoanIssue(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Poo
 	})
 }
 
-func loanIssue(ctx context.Context, theLoan *loanFormat, dbTx pgx.Tx, fsClient *firestore.Client) (string, error) {
+func (Env env) loanIssue(ctx context.Context, theLoan *loanFormat, dbTx pgx.Tx) (string, error) {
 	log.Println("Loan Issuance")
 	var theId string
 	err := dbTx.QueryRow(ctx, `INSERT INTO loans (lendee, lender, lent_value, rate, current_value) VALUES ($1, $2, $3, $4, $5) RETURNING loan_id;`, theLoan.Lendee, theLoan.Lender, theLoan.LentValue, theLoan.LoanRate, theLoan.LentValue).Scan(&theId)
@@ -66,22 +65,22 @@ func loanIssue(ctx context.Context, theLoan *loanFormat, dbTx pgx.Tx, fsClient *
 		return "", err
 	}
 	cashMessage := `Loan Issue - ID ` + theId
-	err = handCashTransaction(&transactionFormat{
+	err = Env.handCashTransaction(&transactionFormat{
 		Sender:   theLoan.Lender,
 		Receiver: theLoan.Lendee,
 		Value:    theLoan.LentValue,
 		Message:  cashMessage,
-	}, ctx, dbTx, fsClient)
+	}, ctx, dbTx)
 	return theId, err
 }
 
-func getLoan(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
+func (Env env) getLoan(w http.ResponseWriter, r *http.Request) {
 	encoder := json.NewEncoder(w)
 	loanId := r.PathValue("loanId")
 	var theLoan loanFormat
 	theLoan.LoanId = loanId
 	reqNat := r.Header.Get("NationName")
-	err := dbPool.QueryRow(r.Context(), `SELECT lendee, lender, lent_value, rate, current_value FROM loans WHERE loan_id = $2`, loanId, loanId).Scan(&theLoan.Lendee, &theLoan.Lender, &theLoan.LentValue, &theLoan.LoanRate, &theLoan.CurrentValue)
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT lendee, lender, lent_value, rate, current_value FROM loans WHERE loan_id = $2`, loanId, loanId).Scan(&theLoan.Lendee, &theLoan.Lender, &theLoan.LentValue, &theLoan.LoanRate, &theLoan.CurrentValue)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -97,11 +96,11 @@ func getLoan(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
 	encoder.Encode(theLoan)
 }
 
-func getLoans(w http.ResponseWriter, r *http.Request, dbPool *pgxpool.Pool) {
+func (Env env) getLoans(w http.ResponseWriter, r *http.Request) {
 	log.Println("Loans Get")
 	requedNat := r.Header.Get("NationName")
 	encoder := json.NewEncoder(w)
-	dbConn, err := dbPool.Acquire(r.Context())
+	dbConn, err := Env.DBPool.Acquire(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

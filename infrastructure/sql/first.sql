@@ -47,7 +47,7 @@ CREATE TYPE direction as ENUM ('buy', 'sell');
 CREATE TYPE priceType as ENUM ('market', 'limit');
 
 CREATE TABLE IF NOT EXISTS open_orders (
-    tradeId bigint UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    trade_id bigint UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     ticker TEXT NOT NULL REFERENCES stocks(ticker),
     trader TEXT NOT NULL REFERENCES accounts(account_name),
     quant INT NOT NULL CHECK(quant >= 0),

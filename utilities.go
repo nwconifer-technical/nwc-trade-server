@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 )
 
-func authKeyVerification(authKey string, userName string) bool {
-	checkKey := md5.Sum([]byte(userName + EXTRA_KEY_STRING))
+func authKeyVerification(authKey string, userName string, extraString string) bool {
+	checkKey := md5.Sum([]byte(userName + extraString))
 	return hex.EncodeToString(checkKey[:]) == authKey
 }
