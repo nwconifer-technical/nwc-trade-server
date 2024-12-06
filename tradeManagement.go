@@ -194,7 +194,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		if oppTrade.Quantity == 0 {
 			err = dbTx.QueryRow(r.Context(), `DELETE FROM open_orders WHERE trade_id = $1`, oppTrade.TradeId).Scan()
 		} else {
-			err = dbTx.QueryRow(r.Context(), `UPDATE open_orders SET quant = $1 WHERE trade_id = $2`, oppTrade.Quantity, oppTrade.Quantity).Scan()
+			err = dbTx.QueryRow(r.Context(), `UPDATE open_orders SET quant = $1 WHERE trade_id = $2`, oppTrade.Quantity, oppTrade.TradeId).Scan()
 		}
 		if err != nil && err != pgx.ErrNoRows {
 			log.Println(`Opposite Update Err`, err)
