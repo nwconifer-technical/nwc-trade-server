@@ -6,7 +6,7 @@ steps:
       - -c
       - |
         go mod tidy
-        env GOOS=linux GOARCH=amd64 go build -o=/workspace/nwc-trading-server .
+        make ciBuild
   - id: "Copy onto Box and Restart"
     name: "gcr.io/cloud-builders/gcloud"
     entrypoint: /bin/bash

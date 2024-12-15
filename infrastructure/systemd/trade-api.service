@@ -9,7 +9,7 @@ Restart=always
 RestartSec=10
 User=root
 WorkingDirectory=/home/alicolliar
-ExecStart=/bin/bash -lc /home/alicolliar/nwc-trading-server
+ExecStart=/home/alicolliar/nwc-trading-server
 
 [Install]
 WantedBy=multi-user.target
