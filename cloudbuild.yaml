@@ -7,6 +7,12 @@ steps:
       - |
         go mod tidy
         make ciBuild
+    env:
+      - "CASH_TRANSACT_COLL=$CASH_TRANSACT_COLL"
+      - "DB_CONNECTSTRING=$DB_CONNECTSTRING"
+      - "EXTRA_KEY_STRING=$EXTRA_KEY_STRING"
+      - "FIRESTORE_DB=$FIRESTORE_DB"
+      - "HASH_COST=$HASH_COST"
   - id: "Copy onto Box and Restart"
     name: "gcr.io/cloud-builders/gcloud"
     entrypoint: /bin/bash
