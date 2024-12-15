@@ -19,7 +19,7 @@ steps:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-   automapSubstitutions: true
+  automapSubstitutions: true
 
 availableSecrets:
   secretManager:
