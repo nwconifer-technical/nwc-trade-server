@@ -19,6 +19,8 @@ steps:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+   automapSubstitutions: true
+
 availableSecrets:
   secretManager:
     - versionName: projects/335883769512/secrets/CASH_TRANSACT_COLL/versions/2
