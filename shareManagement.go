@@ -96,9 +96,10 @@ func buildMarketCap(region string) (float32, error) {
 }
 
 type Quote struct {
-	Ticker      string  `json:"ticker"`
-	MarketPrice float32 `json:"marketPrice"`
-	TotalVolume int     `json:"totalVolume"`
+	Ticker               string  `json:"ticker"`
+	MarketPrice          float32 `json:"marketPrice"`
+	MarketCapitalisation float32 `json:"marketCap"`
+	TotalVolume          int     `json:"totalVolume"`
 }
 
 func (Env env) marketQuote(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +107,7 @@ func (Env env) marketQuote(w http.ResponseWriter, r *http.Request) {
 		Ticker: r.PathValue("ticker"),
 	}
 	theEncoder := json.NewEncoder(w)
-	err := Env.DBPool.QueryRow(r.Context(), `SELECT share_price, total_share_volume FROM stocks WHERE ticker = $1`, sendingQuote.Ticker).Scan(&sendingQuote.MarketPrice, &sendingQuote.TotalVolume)
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, sendingQuote.Ticker).Scan(&sendingQuote.MarketPrice, &sendingQuote.TotalVolume, &sendingQuote.MarketCapitalisation)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -188,4 +189,65 @@ func transferShares(ctx context.Context, dbTx pgx.Tx, transfer shareTransfer) er
 		return err
 	}
 	return nil
+}
+
+type bookReturn struct {
+	CurrentQuote Quote
+	BookDepth    int
+	Buys         []tradeFormat
+	Sells        []tradeFormat
+}
+
+func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
+	log.Println("Book Get Request")
+	var theBook = bookReturn{}
+	theEncoder := json.NewEncoder(w)
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, r.PathValue("ticker")).Scan(&theBook.CurrentQuote.MarketPrice, &theBook.CurrentQuote.TotalVolume, &theBook.CurrentQuote.MarketCapitalisation)
+	theBook.CurrentQuote.Ticker = r.PathValue("ticker")
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Println("Get Quote Err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	theTrades, err := Env.DBPool.Query(r.Context(), `SELECT trader, quant, order_direction, price_type, order_price FROM open_orders WHERE ticker = $1 ORDER BY order_price ASC`, r.PathValue("ticker"))
+	if err == pgx.ErrNoRows {
+		theBook.BookDepth = 0
+		theEncoder.Encode(theBook)
+		return
+	} else if err != nil {
+		log.Println("DB Trades Err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	var currentMaxPrice float32 = 0
+	for {
+		newTrade := theTrades.Next()
+		if !newTrade {
+			theTrades.Close()
+			break
+		}
+		thisTrade := tradeFormat{
+			Ticker: r.PathValue("ticker"),
+		}
+		err = theTrades.Scan(&thisTrade.Sender, &thisTrade.Quantity, &thisTrade.Direction, &thisTrade.PriceType, &thisTrade.Price)
+		if err != nil {
+			log.Println("Proccing Trades Err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if thisTrade.Price > currentMaxPrice {
+			theBook.BookDepth += 1
+			currentMaxPrice = thisTrade.Price
+		}
+		if thisTrade.Direction == "buy" {
+			theBook.Buys = append(theBook.Buys, thisTrade)
+		} else if thisTrade.Direction == "sell" {
+			theBook.Sells = append(theBook.Sells, thisTrade)
+		}
+	}
+	theEncoder.Encode(theBook)
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -17,6 +18,18 @@ type tradeFormat struct {
 	Quantity  int
 	PriceType string
 	Price     float32
+}
+
+func (theTrade tradeFormat) copy() tradeFormat {
+	var newTrade tradeFormat
+	newTrade.TradeId = theTrade.TradeId
+	newTrade.Direction = theTrade.Direction
+	newTrade.Ticker = theTrade.Ticker
+	newTrade.Price = theTrade.Price
+	newTrade.PriceType = theTrade.PriceType
+	newTrade.Sender = theTrade.Sender
+	newTrade.Quantity = theTrade.Quantity
+	return newTrade
 }
 
 func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +50,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		log.Println("JSON Err", err)
 		return
 	}
+	log.Println(sentThing)
 	var account_type string
 	err = dbTx.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, sentThing.Sender).Scan(&account_type)
 	if err != nil {
@@ -71,7 +85,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	jsonEncoder := json.NewEncoder(w)
-	err = dbTx.QueryRow(r.Context(), `SELECT share_price, total_share_volume FROM stocks WHERE ticker = $1`, sentThing.Ticker).Scan(&currentQuote.MarketPrice, &currentQuote.TotalVolume)
+	err = dbTx.QueryRow(r.Context(), `SELECT share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, sentThing.Ticker).Scan(&currentQuote.MarketPrice, &currentQuote.TotalVolume, &currentQuote.MarketCapitalisation)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -94,6 +108,14 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	var openOrders pgx.Rows
 	if strings.EqualFold(sentThing.PriceType, "market") {
 		sentThing.Price = currentQuote.MarketPrice
+	}
+	err = tradePriceUpdate(r.Context(), dbTx, currentQuote, sentThing)
+	if err != nil {
+		log.Println("Update DB Err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if strings.EqualFold(sentThing.PriceType, "market") {
 		if opposingDirect == "sell" {
 			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = $2 AND (order_price <= $3 OR price_type = 'market');`, sentThing.Ticker, opposingDirect, currentQuote.MarketPrice)
 		} else {
@@ -129,36 +151,27 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		}
 		oppOrders = append(oppOrders, oppTrade)
 	}
+	var updSentThing tradeFormat
 	for i := 0; i < len(oppOrders); i++ {
 		oppTrade := oppOrders[i]
-		var cashValue float32
+		// ignore-not-used
 		var transferAmount int
-		if sentThing.Quantity > oppTrade.Quantity {
-			transferAmount = sentThing.Quantity - oppTrade.Quantity
-			sentThing.Quantity -= oppTrade.Quantity
-			oppTrade.Quantity = 0
-		} else if sentThing.Quantity == oppTrade.Quantity {
-			transferAmount = sentThing.Quantity
-			oppTrade.Quantity = 0
-			sentThing.Quantity = 0
-		} else {
-			transferAmount = oppTrade.Quantity - sentThing.Quantity
-			sentThing.Quantity = 0
-			oppTrade.Quantity -= sentThing.Quantity
-		}
-		cashValue = sentThing.Price * float32(transferAmount)
+		var updOppTrade tradeFormat
+		transferAmount, updOppTrade, updSentThing = updateTradeObjs(oppTrade, sentThing)
+		cashValue := sentThing.Price * float32(transferAmount)
+		log.Println(oppTrade)
 		var cashTransfer transactionFormat
 		var shareTrans shareTransfer
 		if strings.EqualFold(sentThing.Direction, "buy") {
 			cashTransfer = transactionFormat{
 				Sender:   sentThing.Sender,
-				Receiver: oppTrade.Sender,
+				Receiver: updOppTrade.Sender,
 				Value:    cashValue,
 				Message:  sentThing.Ticker + ` Trade`,
 			}
 			shareTrans = shareTransfer{
 				Ticker:   sentThing.Ticker,
-				Sender:   oppTrade.Sender,
+				Sender:   updOppTrade.Sender,
 				Receiver: sentThing.Sender,
 				Quantity: transferAmount,
 				AvgPrice: sentThing.Price,
@@ -166,13 +179,13 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		} else {
 			cashTransfer = transactionFormat{
 				Receiver: sentThing.Sender,
-				Sender:   oppTrade.Sender,
+				Sender:   updOppTrade.Sender,
 				Value:    cashValue,
 				Message:  sentThing.Ticker + ` Trade`,
 			}
 			shareTrans = shareTransfer{
 				Ticker:   sentThing.Ticker,
-				Receiver: oppTrade.Sender,
+				Receiver: updOppTrade.Sender,
 				Sender:   sentThing.Sender,
 				Quantity: transferAmount,
 				AvgPrice: sentThing.Price,
@@ -190,11 +203,10 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		log.Println(oppTrade.TradeId, oppTrade.Quantity)
-		if oppTrade.Quantity == 0 {
+		if updOppTrade.Quantity == 0 {
 			err = dbTx.QueryRow(r.Context(), `DELETE FROM open_orders WHERE trade_id = $1`, oppTrade.TradeId).Scan()
 		} else {
-			err = dbTx.QueryRow(r.Context(), `UPDATE open_orders SET quant = $1 WHERE trade_id = $2`, oppTrade.Quantity, oppTrade.TradeId).Scan()
+			err = dbTx.QueryRow(r.Context(), `UPDATE open_orders SET quant = $1 WHERE trade_id = $2`, updOppTrade.Quantity, oppTrade.TradeId).Scan()
 		}
 		if err != nil && err != pgx.ErrNoRows {
 			log.Println(`Opposite Update Err`, err)
@@ -202,7 +214,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if sentThing.Quantity > 0 {
+	if updSentThing.Quantity > 0 {
 		err = dbTx.QueryRow(r.Context(), `INSERT INTO open_orders (ticker, trader, quant, order_direction, price_type, order_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING trade_id`, sentThing.Ticker, sentThing.Sender, sentThing.Quantity, sentThing.Direction, sentThing.PriceType, sentThing.Price).Scan(&enteredTradeId)
 		if err != nil {
 			log.Println("FinalDB Err", err)
@@ -226,6 +238,41 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// func tradePriceUpdate(dbTx pgx.Tx, currentQuote Quote, price float32, quantity float32, direction string) error {
+func tradePriceUpdate(ctx context.Context, dbTx pgx.Tx, currentQuote Quote, theTrade tradeFormat) error {
+	movementPercent := float32(theTrade.Quantity) / float32(currentQuote.TotalVolume)
+	var priceDiffPercent float32 = 0.0
+	var newMarketCap float32 = 0.0
+	if strings.EqualFold(theTrade.Direction, "buy") {
+		priceDiffPercent = (theTrade.Price / currentQuote.MarketPrice)
+		newMarketCap = currentQuote.MarketCapitalisation * (1 + (movementPercent * priceDiffPercent))
+	} else if strings.EqualFold(theTrade.Direction, "sell") {
+		priceDiffPercent = (currentQuote.MarketPrice / theTrade.Price)
+		newMarketCap = currentQuote.MarketCapitalisation * (1 - (movementPercent * priceDiffPercent))
+	}
+	log.Println(newMarketCap)
+	err := dbTx.QueryRow(ctx, `UPDATE stocks SET market_cap = $1, share_price = $2 WHERE ticker = $3`, newMarketCap, (newMarketCap / float32(currentQuote.TotalVolume)), theTrade.Ticker).Scan()
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	return nil
+}
 
-// }
+func updateTradeObjs(oppTrade tradeFormat, sentThing tradeFormat) (int, tradeFormat, tradeFormat) {
+	var transferAmount int
+	newOppTrade := oppTrade.copy()
+	newSentThing := sentThing.copy()
+	if sentThing.Quantity > oppTrade.Quantity {
+		transferAmount = newSentThing.Quantity - oppTrade.Quantity
+		newSentThing.Quantity -= oppTrade.Quantity
+		newOppTrade.Quantity = 0
+	} else if sentThing.Quantity == oppTrade.Quantity {
+		transferAmount = newSentThing.Quantity
+		newOppTrade.Quantity = 0
+		newSentThing.Quantity = 0
+	} else if sentThing.Quantity < oppTrade.Quantity {
+		transferAmount = newSentThing.Quantity
+		newSentThing.Quantity = 0
+		newOppTrade.Quantity -= sentThing.Quantity
+	}
+	return transferAmount, newOppTrade, newSentThing
+}

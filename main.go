@@ -141,6 +141,7 @@ func main() {
 	theMux.HandleFunc("/shares/trade", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedPostWrapper(w, r, primaryEnv.openTrade)
 	})
+	theMux.HandleFunc("/shares/book/{ticker}", primaryEnv.returnAssetBook)
 	theServer := http.Server{
 		Addr:        `:8080`,
 		Handler:     theMux,

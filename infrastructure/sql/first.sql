@@ -30,16 +30,16 @@ CREATE TABLE IF NOT EXISTS loans (
 CREATE TABLE IF NOT EXISTS stocks (
     ticker TEXT UNIQUE NOT NULL PRIMARY KEY,
     region TEXT REFERENCES accounts(account_name),
-    market_cap NUMERIC NOT NULL DEFAULT 0.0 CHECK(market_cap >= 0.0),
-    total_share_volume INT NOT NULL DEFAULT 1000000,
-    share_price NUMERIC
+    market_cap NUMERIC(100,2) NOT NULL DEFAULT 0.0 CHECK(market_cap >= 0.0),
+    total_share_volume INT NOT NULL DEFAULT 0,
+    share_price NUMERIC(100,2)
 );
 
 CREATE TABLE IF NOT EXISTS stock_holdings (
     ticker TEXT NOT NULL REFERENCES stocks(ticker),
     account_name TEXT NOT NULL REFERENCES accounts(account_name),
     share_quant INT NOT NULL DEFAULT 0 CHECK(share_quant >= 0),
-    avg_price NUMERIC DEFAULT 0.0 CHECK(avg_price >= 0.0),
+    avg_price NUMERIC(100,2) DEFAULT 0.0 CHECK(avg_price >= 0.0),
     PRIMARY KEY(ticker, account_name)
 );
 
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS open_orders (
     quant INT NOT NULL CHECK(quant >= 0),
     order_direction direction NOT NULL,
     price_type priceType NOT NULL,
-    order_price NUMERIC CHECK(order_price >= 0.0)
+    order_price NUMERIC(100,2) CHECK(order_price >= 0.0)
 )
 
 INSERT INTO accounts (account_name, account_type, cash_in_hand) VALUES ('New West Conifer', 'region', 1000000);
