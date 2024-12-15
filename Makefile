@@ -25,4 +25,4 @@ localBuild:
 
 ciBuild: 
 	go mod tidy
-	env GOOS=linux GOARCH=amd64 go build -o=/workspace/nwc-trading-server -ldflags="-X 'main.HashCost=${HASH_COST}' -X 'main.DbString=${DB_CONNECTSTRING}' -X 'main.ProjId=NSInvest-infra' -X 'main.ExtraKeyString=${EXTRA_KEY_STRING}' -X 'main.FirestoreString=${FIRESTORE_DB}'" .
+	env GOOS=linux GOARCH=amd64 go build -o=/workspace/nwc-trading-server -ldflags="-X 'main.HashCost=${HASH_COST}' -X 'main.DbString=${DB_CONNECTSTRING}' -X 'main.ProjId=nsinvest-infra' -X 'main.ExtraKeyString=${EXTRA_KEY_STRING}' -X 'main.FirestoreString=${FIRESTORE_DB}'" .
