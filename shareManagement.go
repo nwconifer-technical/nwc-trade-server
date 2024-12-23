@@ -10,6 +10,7 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func createShares(ctx context.Context, dbTx pgx.Tx, region string, numberofShares int) error {
@@ -250,4 +251,114 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	theEncoder.Encode(theBook)
+}
+
+type holdingFormat struct {
+	Ticker        string
+	ShareQuantity int
+	AvgPrice      float32
+}
+
+type portfolioFormat struct {
+	Account    string
+	Holdings   []holdingFormat
+	OpenOrders []tradeFormat
+}
+
+func getAcctOpenOrders(ctx context.Context, dbConn *pgxpool.Conn, acct string) ([]tradeFormat, error) {
+	var trades []tradeFormat
+	tradeReader, err := dbConn.Query(ctx, `SELECT trade_id, ticker, quant, order_direction, price_type, order_price FROM open_orders WHERE trader = $1;`, acct)
+	if err != nil {
+		return nil, err
+	}
+	for tradeReader.Next() {
+		var currentTrade tradeFormat
+		err := tradeReader.Scan(&currentTrade.TradeId, &currentTrade.Ticker, &currentTrade.Quantity, &currentTrade.Direction, &currentTrade.PriceType, &currentTrade.Price)
+		if err != nil {
+			return nil, err
+		}
+		currentTrade.Sender = acct
+		trades = append(trades, currentTrade)
+	}
+	return trades, tradeReader.Err()
+}
+
+func getHoldings(ctx context.Context, dbConn *pgxpool.Conn, acct string) ([]holdingFormat, error) {
+	var holdings []holdingFormat
+	holdingsReader, err := dbConn.Query(ctx, `SELECT ticker, share_quant, avg_price FROM stock_holdings WHERE account_name = $1`, acct)
+	if err != nil {
+		return nil, err
+	}
+	for holdingsReader.Next() {
+		var currentHolding holdingFormat
+		err := holdingsReader.Scan(&currentHolding.Ticker, &currentHolding.ShareQuantity, &currentHolding.AvgPrice)
+		if err != nil {
+			return nil, err
+		}
+		holdings = append(holdings, currentHolding)
+	}
+	return holdings, holdingsReader.Err()
+}
+
+func (Env env) accountPortfolio(w http.ResponseWriter, r *http.Request) {
+	acctName := r.PathValue("region")
+	theEncoder := json.NewEncoder(w)
+	if acctName == "" {
+		acctName = r.Header.Get("NationName")
+	}
+	dbConn, err := Env.DBPool.Acquire(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Conn Acq Err", err)
+		return
+	}
+	if acctName != r.Header.Get("NationName") {
+		var accType string
+		err := dbConn.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE acccount_name = $1`, acctName).Scan(&accType)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Println("AccType Query Err", err)
+			return
+		}
+		if accType == "region" {
+			var accPerms string
+			err := dbConn.QueryRow(r.Context(), `SELECT permission FROM nation_permissions WHERE region_name = $1 AND nation_name = $2;`, acctName, r.Header.Get("NationName")).Scan(&accPerms)
+			if err != nil {
+				if err == pgx.ErrNoRows {
+					w.WriteHeader(http.StatusForbidden)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				log.Println("Perms Check Query Err", err)
+				return
+			}
+		}
+	}
+	theHoldings, err := getHoldings(r.Context(), dbConn, acctName)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("getHoldings Err", err)
+		return
+	}
+	acctOpens, err := getAcctOpenOrders(r.Context(), dbConn, acctName)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("getAcctOpenOrders Err", err)
+		return
+	}
+	returnObj := portfolioFormat{
+		Account:    acctName,
+		Holdings:   theHoldings,
+		OpenOrders: acctOpens,
+	}
+	err = theEncoder.Encode(returnObj)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Encode Err", err)
+		return
+	}
 }

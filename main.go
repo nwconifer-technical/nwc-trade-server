@@ -56,53 +56,39 @@ func main() {
 		log.Panic(err)
 	}
 	defer primaryEnv.FSClient.Close()
-	// var primaryEnv = env{
-	// 	CashCollection: os.Getenv("CASH_TRANSACT_COLL"),
-	// 	HashCost:       hashCost,
-	// 	KeyString:      os.Getenv("EXTRA_KEY_STRING"),
-	// 	DBPool:         dbPool,
-	// 	FSClient:       fsClient,
-	// }
 
 	theMux := http.NewServeMux()
 	theMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello!"))
 	})
-	theMux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+	theMux.HandleFunc("get /ping", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Pinged")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Pong"))
 	})
-	theMux.HandleFunc("/signup/nation", func(w http.ResponseWriter, r *http.Request) {
-		openPostWrapper(w, r, primaryEnv.signupFunc)
+	theMux.HandleFunc("POST /signup/nation", primaryEnv.signupFunc)
+	theMux.HandleFunc("POST /signup/region", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.registerRegion)
 	})
-	theMux.HandleFunc("/signup/region", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.securedPostWrapper(w, r, primaryEnv.registerRegion)
+	theMux.HandleFunc("POST /verify/nation", primaryEnv.userVerification)
+	theMux.HandleFunc("POST /cash/transaction", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.outerCashHandler)
 	})
-	theMux.HandleFunc("/verify/nation", func(w http.ResponseWriter, r *http.Request) {
-		openPostWrapper(w, r, primaryEnv.userVerification)
+	theMux.HandleFunc("GET /cash/details/{natName}", primaryEnv.nationCashDetails)
+	theMux.HandleFunc("GET /loans", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.getLoans)
 	})
-	theMux.HandleFunc("/cash/transaction", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.securedPostWrapper(w, r, primaryEnv.outerCashHandler)
+	theMux.HandleFunc("GET /loan/{loanId}", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.getLoan)
 	})
-	theMux.HandleFunc("/cash/details/{natName}", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.nationCashDetails(w, r)
+	theMux.HandleFunc("POST /loan/issue", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.manualLoanIssue)
 	})
-	theMux.HandleFunc("/loans", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.securedGetWrapper(w, r, primaryEnv.getLoans)
+	theMux.HandleFunc("GET /nation/{natName}", primaryEnv.nationInfo)
+	theMux.HandleFunc("GET /region/{region}", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.regionInfo)
 	})
-	theMux.HandleFunc("/loan/{loanId}", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.securedGetWrapper(w, r, primaryEnv.getLoan)
-	})
-	theMux.HandleFunc("/loan/issue", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.securedPostWrapper(w, r, primaryEnv.manualLoanIssue)
-	})
-	theMux.HandleFunc("/nation/{natName}", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.nationInfo(w, r)
-	})
-	theMux.HandleFunc("/region/{region}", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.securedGetWrapper(w, r, primaryEnv.regionInfo)
-	})
-	theMux.HandleFunc("/list/nations", func(w http.ResponseWriter, r *http.Request) {
+	theMux.HandleFunc("GET /list/nations", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		headEncoder := json.NewEncoder(w)
 		dbRows, err := primaryEnv.DBPool.Query(r.Context(), `SELECT account_name FROM accounts WHERE account_type = 'nation' ORDER BY cash_in_hand DESC LIMIT 25;`)
@@ -132,16 +118,21 @@ func main() {
 		}
 		headEncoder.Encode(objToRet)
 	})
-	theMux.HandleFunc("/shares/quote/{ticker}", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.marketQuote(w, r)
+	theMux.HandleFunc("GET /shares/quote/{ticker}", primaryEnv.marketQuote)
+	theMux.HandleFunc("POST /shares/transfer", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.manualShareTransfer)
 	})
-	theMux.HandleFunc("/shares/transfer", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.securedPostWrapper(w, r, primaryEnv.manualShareTransfer)
+	theMux.HandleFunc("POST /shares/trade", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.openTrade)
 	})
-	theMux.HandleFunc("/shares/trade", func(w http.ResponseWriter, r *http.Request) {
-		primaryEnv.securedPostWrapper(w, r, primaryEnv.openTrade)
+	theMux.HandleFunc("GET /shares/book/{ticker}", primaryEnv.returnAssetBook)
+	theMux.HandleFunc("GET /shares/portfolio", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.accountPortfolio)
 	})
-	theMux.HandleFunc("/shares/book/{ticker}", primaryEnv.returnAssetBook)
+	theMux.HandleFunc("GET /shares/portfolio/{region}", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.accountPortfolio)
+	})
+
 	theServer := http.Server{
 		Addr:        `:8080`,
 		Handler:     theMux,

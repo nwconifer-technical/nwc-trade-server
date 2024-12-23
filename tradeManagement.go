@@ -50,7 +50,6 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		log.Println("JSON Err", err)
 		return
 	}
-	log.Println(sentThing)
 	var account_type string
 	err = dbTx.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, sentThing.Sender).Scan(&account_type)
 	if err != nil {
@@ -117,15 +116,15 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.EqualFold(sentThing.PriceType, "market") {
 		if opposingDirect == "sell" {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = $2 AND (order_price <= $3 OR price_type = 'market');`, sentThing.Ticker, opposingDirect, currentQuote.MarketPrice)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'sell' AND (order_price <= $2 OR price_type = 'market');`, sentThing.Ticker, currentQuote.MarketPrice)
 		} else {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = $2 AND (order_price >= $3 OR price_type = 'market');`, sentThing.Ticker, opposingDirect, currentQuote.MarketPrice)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'buy' AND (order_price >= $2 OR price_type = 'market');`, sentThing.Ticker, currentQuote.MarketPrice)
 		}
 	} else {
 		if opposingDirect == "sell" {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = $2 AND order_price <= $3;`, sentThing.Ticker, opposingDirect, sentThing.Price)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'sell' AND order_price <= $2;`, sentThing.Ticker, sentThing.Price)
 		} else {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = $2 AND order_price >= $3;`, sentThing.Ticker, opposingDirect, sentThing.Price)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'buy' AND order_price >= $2;`, sentThing.Ticker, sentThing.Price)
 		}
 	}
 	if err != nil && err != pgx.ErrNoRows {
@@ -152,8 +151,10 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		oppOrders = append(oppOrders, oppTrade)
 	}
 	var updSentThing tradeFormat
+	matchTrades := 0
 	for i := 0; i < len(oppOrders); i++ {
 		oppTrade := oppOrders[i]
+		matchTrades += 1
 		// ignore-not-used
 		var transferAmount int
 		var updOppTrade tradeFormat
@@ -214,8 +215,13 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	log.Println(updSentThing.Quantity)
+	if updSentThing.Quantity == 0 {
+		updSentThing = sentThing.copy()
+	}
+	log.Println(updSentThing.Quantity)
 	if updSentThing.Quantity > 0 {
-		err = dbTx.QueryRow(r.Context(), `INSERT INTO open_orders (ticker, trader, quant, order_direction, price_type, order_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING trade_id`, sentThing.Ticker, sentThing.Sender, sentThing.Quantity, sentThing.Direction, sentThing.PriceType, sentThing.Price).Scan(&enteredTradeId)
+		err = dbTx.QueryRow(r.Context(), `INSERT INTO open_orders (ticker, trader, quant, order_direction, price_type, order_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING trade_id`, sentThing.Ticker, sentThing.Sender, sentThing.Quantity, strings.ToLower(sentThing.Direction), sentThing.PriceType, sentThing.Price).Scan(&enteredTradeId)
 		if err != nil {
 			log.Println("FinalDB Err", err)
 			w.WriteHeader(http.StatusInternalServerError)
