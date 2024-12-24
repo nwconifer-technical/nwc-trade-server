@@ -39,5 +39,5 @@ availableSecrets:
       env: "EXTRA_KEY_STRING"
     - versionName: projects/335883769512/secrets/FIRESTORE_DB/versions/1
       env: "FIRESTORE_DB"
-    - versionName: projects/335883769512/secrets/HASH_COST/versions/1
+    - versionName: projects/335883769512/secrets/HASH_COST/versions/2
       env: "HASH_COST"
