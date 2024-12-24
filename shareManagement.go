@@ -26,7 +26,7 @@ func createShares(ctx context.Context, dbTx pgx.Tx, region string, numberofShare
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
-	err = dbTx.QueryRow(ctx, `UPDATE stocks SET total_share_volume = total_share_volume + $1, share_price = $2`, numberofShares, market_cap/newVol).Scan()
+	err = dbTx.QueryRow(ctx, `UPDATE stocks SET total_share_volume = total_share_volume + $1, share_price = $2 WHERE ticker = $3`, numberofShares, market_cap/newVol, ticker).Scan()
 	return err
 }
 
@@ -98,6 +98,7 @@ func buildMarketCap(region string) (float32, error) {
 
 type Quote struct {
 	Ticker               string  `json:"ticker"`
+	Region               string  `json:"region"`
 	MarketPrice          float32 `json:"marketPrice"`
 	MarketCapitalisation float32 `json:"marketCap"`
 	TotalVolume          int     `json:"totalVolume"`
@@ -108,7 +109,7 @@ func (Env env) marketQuote(w http.ResponseWriter, r *http.Request) {
 		Ticker: r.PathValue("ticker"),
 	}
 	theEncoder := json.NewEncoder(w)
-	err := Env.DBPool.QueryRow(r.Context(), `SELECT share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, sendingQuote.Ticker).Scan(&sendingQuote.MarketPrice, &sendingQuote.TotalVolume, &sendingQuote.MarketCapitalisation)
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT region, share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, sendingQuote.Ticker).Scan(&sendingQuote.Region, &sendingQuote.MarketPrice, &sendingQuote.TotalVolume, &sendingQuote.MarketCapitalisation)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -203,7 +204,7 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 	log.Println("Book Get Request")
 	var theBook = bookReturn{}
 	theEncoder := json.NewEncoder(w)
-	err := Env.DBPool.QueryRow(r.Context(), `SELECT share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, r.PathValue("ticker")).Scan(&theBook.CurrentQuote.MarketPrice, &theBook.CurrentQuote.TotalVolume, &theBook.CurrentQuote.MarketCapitalisation)
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT region, share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, r.PathValue("ticker")).Scan(&theBook.CurrentQuote.Region, &theBook.CurrentQuote.MarketPrice, &theBook.CurrentQuote.TotalVolume, &theBook.CurrentQuote.MarketCapitalisation)
 	theBook.CurrentQuote.Ticker = r.PathValue("ticker")
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -214,7 +215,7 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	theTrades, err := Env.DBPool.Query(r.Context(), `SELECT trader, quant, order_direction, price_type, order_price FROM open_orders WHERE ticker = $1 ORDER BY order_price ASC`, r.PathValue("ticker"))
+	theTrades, err := Env.DBPool.Query(r.Context(), `SELECT trade_id, trader, quant, order_direction, price_type, order_price FROM open_orders WHERE ticker = $1 ORDER BY order_price ASC`, r.PathValue("ticker"))
 	if err == pgx.ErrNoRows {
 		theBook.BookDepth = 0
 		theEncoder.Encode(theBook)
@@ -234,7 +235,7 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 		thisTrade := tradeFormat{
 			Ticker: r.PathValue("ticker"),
 		}
-		err = theTrades.Scan(&thisTrade.Sender, &thisTrade.Quantity, &thisTrade.Direction, &thisTrade.PriceType, &thisTrade.Price)
+		err = theTrades.Scan(&thisTrade.TradeId, &thisTrade.Sender, &thisTrade.Quantity, &thisTrade.Direction, &thisTrade.PriceType, &thisTrade.Price)
 		if err != nil {
 			log.Println("Proccing Trades Err", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -360,5 +361,43 @@ func (Env env) accountPortfolio(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Encode Err", err)
 		return
+	}
+}
+
+func (Env env) getAllStocks(w http.ResponseWriter, r *http.Request) {
+	anEncoder := json.NewEncoder(w)
+	w.Header().Set("Content-Type", "application/json")
+	var allEquities []Quote
+	allStocks, err := Env.DBPool.Query(r.Context(), `SELECT ticker, region, market_cap, total_share_volume, share_price FROM stocks`)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Query Err", err)
+		return
+	}
+	for allStocks.Next() {
+		var thisQuote Quote
+		err := allStocks.Scan(&thisQuote.Ticker, &thisQuote.Region, &thisQuote.MarketCapitalisation, &thisQuote.TotalVolume, &thisQuote.MarketPrice)
+		if err != nil {
+			log.Println("Scanning Err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		allEquities = append(allEquities, thisQuote)
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Scan2 Err", err)
+		return
+	}
+	toSend := struct {
+		AllStocks []Quote `json:"allStocks"`
+	}{
+		AllStocks: allEquities,
+	}
+	w.WriteHeader(http.StatusOK)
+	err = anEncoder.Encode(toSend)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Encoder Error", err)
 	}
 }

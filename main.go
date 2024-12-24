@@ -125,6 +125,7 @@ func main() {
 	theMux.HandleFunc("POST /shares/trade", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedWrapper(w, r, primaryEnv.openTrade)
 	})
+	theMux.HandleFunc("GET /shares/quote", primaryEnv.getAllStocks)
 	theMux.HandleFunc("GET /shares/book/{ticker}", primaryEnv.returnAssetBook)
 	theMux.HandleFunc("GET /shares/portfolio", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedWrapper(w, r, primaryEnv.accountPortfolio)

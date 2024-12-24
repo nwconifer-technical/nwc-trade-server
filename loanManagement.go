@@ -51,9 +51,9 @@ func (Env env) manualLoanIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusCreated)
 	encoder.Encode(struct {
-		loanId string `json:"loanId"`
+		LoanId string `json:"loanId"`
 	}{
-		loanId: theLoan.LoanId,
+		LoanId: theLoan.LoanId,
 	})
 }
 

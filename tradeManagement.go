@@ -216,7 +216,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	log.Println(updSentThing.Quantity)
-	if updSentThing.Quantity == 0 {
+	if updSentThing.Ticker == "" {
 		updSentThing = sentThing.copy()
 	}
 	log.Println(updSentThing.Quantity)
