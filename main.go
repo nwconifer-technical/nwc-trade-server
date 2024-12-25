@@ -125,6 +125,33 @@ func main() {
 	theMux.HandleFunc("POST /shares/trade", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedWrapper(w, r, primaryEnv.openTrade)
 	})
+	theMux.HandleFunc("GET /shares/trade/{id}", func(w http.ResponseWriter, r *http.Request) {
+		tradeId := r.PathValue("id")
+		var returnTrade tradeFormat
+		anEncoder := json.NewEncoder(w)
+		err := primaryEnv.DBPool.QueryRow(r.Context(), `SELECT ticker, trader, quant, order_direction, price_type, order_price FROM open_orders WHERE trade_id = $1`, tradeId).Scan(&returnTrade.Ticker, &returnTrade.Sender, &returnTrade.Quantity, &returnTrade.Direction, &returnTrade.PriceType, &returnTrade.Price)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Println("Trade Find err", err)
+		}
+		anEncoder.Encode(returnTrade)
+	})
+	theMux.HandleFunc("DELETE /shares/trade/{id}", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, func(w http.ResponseWriter, r *http.Request) {
+			tradeId := r.PathValue("id")
+			err := primaryEnv.DBPool.QueryRow(r.Context(), `DELETE FROM open_orders WHERE trade_id = $1`, tradeId).Scan()
+			if err != nil && err != pgx.ErrNoRows {
+				w.WriteHeader(http.StatusInternalServerError)
+				log.Println("Delete Trade Err", err)
+			}
+			w.WriteHeader(http.StatusOK)
+		})
+
+	})
 	theMux.HandleFunc("GET /shares/quote", primaryEnv.getAllStocks)
 	theMux.HandleFunc("GET /shares/book/{ticker}", primaryEnv.returnAssetBook)
 	theMux.HandleFunc("GET /shares/portfolio", func(w http.ResponseWriter, r *http.Request) {

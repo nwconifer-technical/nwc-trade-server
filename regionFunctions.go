@@ -65,7 +65,7 @@ func (Env env) registerRegion(w http.ResponseWriter, r *http.Request) {
 func (Env env) regionInfo(w http.ResponseWriter, r *http.Request) {
 	returnObject := struct {
 		RegionName    string
-		HandValue     float32
+		HandValue     float64
 		EscrowValue   float32
 		CashTransacts []transactionFormat
 		Loans         []loanFormat
@@ -80,7 +80,7 @@ func (Env env) regionInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer theConn.Release()
-	err = theConn.QueryRow(r.Context(), `SELECT account_name, cash_in_hand, cash_in_escrow FROM accounts, nation_permissions WHERE account_type = 'region' AND (nation_permissions.region_name = accounts.account_name AND nation_permissions.nation_name = $1);`, requingNation).Scan(&returnObject.RegionName, &returnObject.HandValue, &returnObject.EscrowValue)
+	err = theConn.QueryRow(r.Context(), `SELECT account_name, cash_in_hand, cash_in_escrow FROM accounts, nation_permissions WHERE account_type = 'region' AND account_name = $1 AND (nation_permissions.region_name = accounts.account_name AND nation_permissions.nation_name = $2) LIMIT 1;`, regionToRet, requingNation).Scan(&returnObject.RegionName, &returnObject.HandValue, &returnObject.EscrowValue)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)

@@ -368,7 +368,7 @@ func (Env env) getAllStocks(w http.ResponseWriter, r *http.Request) {
 	anEncoder := json.NewEncoder(w)
 	w.Header().Set("Content-Type", "application/json")
 	var allEquities []Quote
-	allStocks, err := Env.DBPool.Query(r.Context(), `SELECT ticker, region, market_cap, total_share_volume, share_price FROM stocks`)
+	allStocks, err := Env.DBPool.Query(r.Context(), `SELECT ticker, region, market_cap, total_share_volume, share_price FROM stocks ORDER BY market_cap DESC`)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Query Err", err)
