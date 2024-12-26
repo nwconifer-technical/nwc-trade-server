@@ -315,7 +315,7 @@ func (Env env) accountPortfolio(w http.ResponseWriter, r *http.Request) {
 	}
 	if acctName != r.Header.Get("NationName") {
 		var accType string
-		err := dbConn.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE acccount_name = $1`, acctName).Scan(&accType)
+		err := dbConn.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, acctName).Scan(&accType)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				w.WriteHeader(http.StatusNotFound)
