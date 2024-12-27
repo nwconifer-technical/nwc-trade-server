@@ -18,6 +18,15 @@ CREATE TABLE IF NOT EXISTS nation_permissions (
     CONSTRAINT separateThings CHECK(region_name != nation_name)
 );
 
+CREATE TABLE IF NOT EXISTS cash_transactions (
+    transaction_id bigint UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    timecode TIMESTAMP NOT NULL,
+    sender TEXT NOT NULL REFERENCES accounts(account_name),
+    receiver TEXT NOT NULL REFERENCES accounts(account_name),
+    transaction_value NUMERIC(100,2) NOT NULL CHECK(transaction_value >= 0.0),
+    transaction_message TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS loans (
     loan_id bigint UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     lendee TEXT NOT NULL REFERENCES accounts(account_name),

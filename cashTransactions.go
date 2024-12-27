@@ -7,9 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"cloud.google.com/go/firestore"
 	"github.com/jackc/pgx/v5"
-	"google.golang.org/api/iterator"
 )
 
 type transactionFormat struct {
@@ -90,49 +88,41 @@ func (Env env) handCashTransaction(transaction *transactionFormat, ctx context.C
 	transaction.Timecode = time.Now()
 	var err error
 	err = dbTx.QueryRow(ctx, `UPDATE accounts SET cash_in_hand = cash_in_hand - $1 WHERE account_name = $2`, transaction.Value, transaction.Sender).Scan()
-	if err != pgx.ErrNoRows {
+	if err != pgx.ErrNoRows && err != nil {
 		return err
 	}
 	err = dbTx.QueryRow(ctx, `UPDATE accounts SET cash_in_hand = cash_in_hand + $1 WHERE account_name = $2`, transaction.Value, transaction.Receiver).Scan()
-	if err != pgx.ErrNoRows {
+	if err != pgx.ErrNoRows && err != nil {
 		return err
 	}
-	_, _, err = Env.FSClient.Collection(Env.CashCollection).Add(ctx, transaction)
-	return err
+	err = dbTx.QueryRow(ctx, `INSERT INTO cash_transactions (timecode, sender, receiver, transaction_value, transaction_message) VALUES ($1,$2,$3,$4,$5)`, transaction.Timecode.Format(`2006-01-02 15:04:05 MST`), transaction.Sender, transaction.Receiver, transaction.Value, transaction.Message).Scan()
+	if err != pgx.ErrNoRows && err != nil {
+		return err
+	}
+	return nil
 }
 
 func (Env env) getUserCashTransactions(ctx context.Context, user string) ([]transactionFormat, error) {
 	var cashTransacts []transactionFormat
-	documents := Env.FSClient.Collection(Env.CashCollection).WhereEntity(firestore.OrFilter{
-		Filters: []firestore.EntityFilter{
-			firestore.PropertyFilter{
-				Path:     "sender",
-				Operator: "==",
-				Value:    user,
-			},
-			firestore.PropertyFilter{
-				Path:     "receiver",
-				Operator: "==",
-				Value:    user,
-			},
-		},
-	}).OrderBy("timestamp", firestore.Desc).Limit(25).Documents(ctx)
-	for {
-		docu, err := documents.Next()
+	dbConn, err := Env.DBPool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer dbConn.Release()
+	cashRows, err := dbConn.Query(ctx, `SELECT timecode, sender, receiver, transaction_value, transaction_message FROM cash_transactions WHERE sender = $1 OR receiver = $1 ORDER BY timecode DESC LIMIT 25;`, user)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	for cashRows.Next() {
+		curTransact := transactionFormat{}
+		err := cashRows.Scan(&curTransact.Timecode, &curTransact.Sender, &curTransact.Receiver, &curTransact.Value, &curTransact.Message)
 		if err != nil {
-			if err == iterator.Done {
-				break
-			}
-			log.Println("FS Err", err)
 			return nil, err
 		}
-		var thisTransact transactionFormat
-		err = docu.DataTo(&thisTransact)
-		if err != nil {
-			log.Println("Docu Err", err)
-			return nil, err
-		}
-		cashTransacts = append(cashTransacts, thisTransact)
+		cashTransacts = append(cashTransacts, curTransact)
 	}
 	return cashTransacts, nil
 }

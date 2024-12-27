@@ -37,7 +37,7 @@ func (Env env) logPrices(ctx context.Context) error {
 			log.Println("Share Price Logging ", ticker, "Err", err)
 			return err
 		}
-		bigBatch.Queue(`INSERT INTO stock_prices (timecode, ticker, log_market_price) VALUES ($1,$2,$3)`, theTime.Format(`2006-01-02 15:04:05`), ticker, price)
+		bigBatch.Queue(`INSERT INTO stock_prices (timecode, ticker, log_market_price) VALUES ($1,$2,$3)`, theTime.Format(`2006-01-02 15:04:05 MST`), ticker, price)
 	}
 	if allStocks.Err() != nil {
 		log.Println("Share Price Logging Err", err)
