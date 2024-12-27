@@ -100,6 +100,7 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer dbRows.Close()
 		objToRet := struct {
 			Nations []string
 		}{}
