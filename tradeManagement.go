@@ -235,11 +235,13 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if enteredTradeId != 0 {
+		w.WriteHeader(http.StatusCreated)
 		jsonEncoder.Encode(struct {
 			TradeId int
 		}{
 			TradeId: enteredTradeId,
 		})
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
