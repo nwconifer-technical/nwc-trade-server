@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"github.com/go-co-op/gocron/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -57,6 +58,18 @@ func main() {
 	}
 	defer primaryEnv.FSClient.Close()
 
+	cronSched, err := gocron.NewScheduler()
+	if err != nil {
+		log.Fatal(err)
+	}
+	cronSched.NewJob(
+		gocron.CronJob(`*/30 * * * *`, false),
+		gocron.NewTask(primaryEnv.logPrices, primCtx),
+	)
+	cronSched.NewJob(
+		gocron.CronJob(`5 00 * * *`, false),
+		gocron.NewTask(env.updateLoanValues, primCtx),
+	)
 	theMux := http.NewServeMux()
 	theMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello!"))
@@ -166,6 +179,7 @@ func main() {
 		Handler:     theMux,
 		ReadTimeout: 5 * time.Second,
 	}
+	cronSched.Start()
 	log.Println("NWC Trade Server Started")
 	err = theServer.ListenAndServe()
 	defer theServer.Shutdown(primCtx)

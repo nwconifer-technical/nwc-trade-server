@@ -7,11 +7,50 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gosimple/slug"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func (Env env) logPrices(ctx context.Context) error {
+	theTime := time.Now()
+	newConn, err := Env.DBPool.Acquire(ctx)
+	if err != nil {
+		log.Println("Share Price Logging Err", err)
+		return err
+	}
+	defer newConn.Release()
+	allStocks, err := newConn.Query(ctx, `SELECT ticker, share_price FROM stocks`)
+	if err != nil {
+		log.Println("Share Price Logging Err", err)
+		return err
+	}
+	defer allStocks.Close()
+	bigBatch := pgx.Batch{}
+	for allStocks.Next() {
+		var ticker string
+		var price float64
+		err := allStocks.Scan(&ticker, &price)
+		if err != nil {
+			log.Println("Share Price Logging ", ticker, "Err", err)
+			return err
+		}
+		bigBatch.Queue(`INSERT INTO stock_prices (timecode, ticker, log_market_price) VALUES ($1,$2,$3)`, theTime.Format(`2006-01-02 15:04:05`), ticker, price)
+	}
+	if allStocks.Err() != nil {
+		log.Println("Share Price Logging Err", err)
+		return err
+	}
+	err = newConn.SendBatch(ctx, &bigBatch).Close()
+	if err != nil {
+		log.Println("Share Price Logging Err", err)
+		return err
+	}
+
+	return nil
+}
 
 func createShares(ctx context.Context, dbTx pgx.Tx, region string, numberofShares int) error {
 	var ticker string

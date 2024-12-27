@@ -35,6 +35,13 @@ CREATE TABLE IF NOT EXISTS stocks (
     share_price NUMERIC(100,2)
 );
 
+CREATE TABLE IF NOT EXISTS stock_prices (
+    price_log_id BIGINT UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    timecode TIMESTAMP NOT NULL,
+    ticker TEXT NOT NULL REFERENCES stocks(ticker),
+    log_market_price NUMERIC(100,2) NOT NULL CHECK(log_market_price >= 0.0)
+);
+
 CREATE TABLE IF NOT EXISTS stock_holdings (
     ticker TEXT NOT NULL REFERENCES stocks(ticker),
     account_name TEXT NOT NULL REFERENCES accounts(account_name),
