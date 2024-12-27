@@ -150,6 +150,7 @@ func (Env env) manualShareTransfer(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer dbTx.Rollback(r.Context())
 	if err = transferShares(r.Context(), dbTx, sentThing); err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusUnprocessableEntity)
@@ -225,6 +226,7 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer theTrades.Close()
 	var currentMaxPrice float32 = 0
 	for {
 		newTrade := theTrades.Next()
@@ -272,6 +274,7 @@ func getAcctOpenOrders(ctx context.Context, dbConn *pgxpool.Conn, acct string) (
 	if err != nil {
 		return nil, err
 	}
+	defer tradeReader.Close()
 	for tradeReader.Next() {
 		var currentTrade tradeFormat
 		err := tradeReader.Scan(&currentTrade.TradeId, &currentTrade.Ticker, &currentTrade.Quantity, &currentTrade.Direction, &currentTrade.PriceType, &currentTrade.Price)
@@ -290,6 +293,7 @@ func getHoldings(ctx context.Context, dbConn *pgxpool.Conn, acct string) ([]hold
 	if err != nil {
 		return nil, err
 	}
+	defer holdingsReader.Close()
 	for holdingsReader.Next() {
 		var currentHolding holdingFormat
 		err := holdingsReader.Scan(&currentHolding.Ticker, &currentHolding.ShareQuantity, &currentHolding.AvgPrice)
@@ -313,6 +317,7 @@ func (Env env) accountPortfolio(w http.ResponseWriter, r *http.Request) {
 		log.Println("Conn Acq Err", err)
 		return
 	}
+	defer dbConn.Release()
 	if acctName != r.Header.Get("NationName") {
 		var accType string
 		err := dbConn.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, acctName).Scan(&accType)
@@ -374,6 +379,7 @@ func (Env env) getAllStocks(w http.ResponseWriter, r *http.Request) {
 		log.Println("Query Err", err)
 		return
 	}
+	defer allStocks.Close()
 	for allStocks.Next() {
 		var thisQuote Quote
 		err := allStocks.Scan(&thisQuote.Ticker, &thisQuote.Region, &thisQuote.MarketCapitalisation, &thisQuote.TotalVolume, &thisQuote.MarketPrice)

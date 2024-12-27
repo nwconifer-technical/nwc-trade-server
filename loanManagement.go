@@ -32,11 +32,11 @@ func (Env env) manualLoanIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	theLoan.CurrentValue = theLoan.LentValue
 	dbTx, err := Env.DBPool.Begin(r.Context())
-	defer dbTx.Rollback(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer dbTx.Rollback(r.Context())
 	theLoan.LoanId, err = Env.loanIssue(r.Context(), &theLoan, dbTx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -128,6 +128,7 @@ func getAccountLoans(ctx context.Context, dbConn *pgxpool.Conn, accountName stri
 	if err != nil {
 		return nil, err
 	}
+	defer retRows.Close()
 	var returnArray []loanFormat
 	for {
 		if !retRows.Next() {
