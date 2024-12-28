@@ -174,6 +174,7 @@ func main() {
 	theMux.HandleFunc("GET /shares/portfolio/{region}", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedWrapper(w, r, primaryEnv.accountPortfolio)
 	})
+	theMux.HandleFunc("GET /shares/recentprices/{ticker}", primaryEnv.getRecentPriceHistory)
 
 	theServer := http.Server{
 		Addr:        `:8080`,

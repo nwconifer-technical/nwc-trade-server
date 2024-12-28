@@ -446,3 +446,52 @@ func (Env env) getAllStocks(w http.ResponseWriter, r *http.Request) {
 		log.Println("Encoder Error", err)
 	}
 }
+
+type TimeQuote struct {
+	Timecode time.Time
+	LogPrice float32
+}
+
+func (Env env) getRecentPriceHistory(w http.ResponseWriter, r *http.Request) {
+	var thePrices []TimeQuote
+	ticker := r.PathValue(`ticker`)
+	curTime := time.Now().AddDate(0, 0, -7)
+	encod := json.NewEncoder(w)
+	dbConn, err := Env.DBPool.Acquire(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("recentPrices err", err)
+		return
+	}
+	defer dbConn.Release()
+	thePastTimes, err := dbConn.Query(r.Context(), `SELECT timecode, log_market_price FROM stock_prices WHERE ticker = $1 AND timecode >= $2 ORDER BY timecode ASC;`, ticker, curTime)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("recentPrices err", err)
+		return
+	}
+	for thePastTimes.Next() {
+		var thisPrice TimeQuote
+		if thePastTimes.Err() != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Println("recentPrices reader err", thePastTimes.Err())
+			return
+		}
+		err := thePastTimes.Scan(&thisPrice.Timecode, &thisPrice.LogPrice)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Println("recentPrices reader err", thePastTimes.Err())
+			return
+		}
+		thePrices = append(thePrices, thisPrice)
+	}
+	if len(thePrices) < 1 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	encod.Encode(struct {
+		RecentPrice []TimeQuote
+	}{
+		RecentPrice: thePrices,
+	})
+}
