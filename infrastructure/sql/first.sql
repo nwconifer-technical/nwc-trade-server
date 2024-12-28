@@ -18,6 +18,15 @@ CREATE TABLE IF NOT EXISTS nation_permissions (
     CONSTRAINT separateThings CHECK(region_name != nation_name)
 );
 
+CREATE TABLE IF NOT EXISTS cash_transactions (
+    transaction_id bigint UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    timecode TIMESTAMP NOT NULL,
+    sender TEXT NOT NULL REFERENCES accounts(account_name),
+    receiver TEXT NOT NULL REFERENCES accounts(account_name),
+    transaction_value NUMERIC(100,2) NOT NULL CHECK(transaction_value >= 0.0),
+    transaction_message TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS loans (
     loan_id bigint UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     lendee TEXT NOT NULL REFERENCES accounts(account_name),
@@ -33,6 +42,13 @@ CREATE TABLE IF NOT EXISTS stocks (
     market_cap NUMERIC(100,2) NOT NULL DEFAULT 0.0 CHECK(market_cap >= 0.0),
     total_share_volume INT NOT NULL DEFAULT 0,
     share_price NUMERIC(100,2)
+);
+
+CREATE TABLE IF NOT EXISTS stock_prices (
+    price_log_id BIGINT UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    timecode TIMESTAMP NOT NULL,
+    ticker TEXT NOT NULL REFERENCES stocks(ticker),
+    log_market_price NUMERIC(100,2) NOT NULL CHECK(log_market_price >= 0.0)
 );
 
 CREATE TABLE IF NOT EXISTS stock_holdings (

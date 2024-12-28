@@ -143,3 +143,34 @@ func getAccountLoans(ctx context.Context, dbConn *pgxpool.Conn, accountName stri
 	}
 	return returnArray, nil
 }
+
+func (Env env) updateLoanValues(ctx context.Context) error {
+	dbConn, err := Env.DBPool.Acquire(ctx)
+	if err != nil {
+		log.Println("Loan Update job err", err)
+		return err
+	}
+	defer dbConn.Release()
+	theLoans, err := dbConn.Query(ctx, `SELECT loan_id, rate, current_value FROM loans`)
+	if err != nil {
+		log.Println("Loan update job err", err)
+		return err
+	}
+	loanBatch := pgx.Batch{}
+	for theLoans.Next() {
+		var loanId int
+		var loanRate, curVal int32
+		err := theLoans.Scan(&loanId, &loanRate, &curVal)
+		if err != nil {
+			log.Println("Loan update err", err)
+			return err
+		}
+		loanBatch.Queue(`UPDATE loans SET current_value = current_value * (1+($1/100)) WHERE loan_id = $2`, loanRate, loanRate)
+	}
+	err = dbConn.SendBatch(ctx, &loanBatch).Close()
+	if err != nil && err != pgx.ErrNoRows {
+		log.Println("Loan update job err", err)
+		return err
+	}
+	return err
+}
