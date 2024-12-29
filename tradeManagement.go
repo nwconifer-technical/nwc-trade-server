@@ -125,7 +125,8 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = tradePriceUpdate(r.Context(), dbTx, currentQuote, sentThing)
+	newPrice, err := tradePriceUpdate(r.Context(), dbTx, currentQuote, sentThing)
+	log.Println(newPrice, sentThing.Price)
 	if err != nil {
 		log.Println("Update DB Err", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -133,9 +134,9 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.EqualFold(sentThing.PriceType, "market") {
 		if opposingDirect == "sell" {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'sell' AND (order_price <= $2 OR price_type = 'market');`, sentThing.Ticker, currentQuote.MarketPrice)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'sell' AND (order_price <= $2 OR price_type = 'market');`, sentThing.Ticker, newPrice)
 		} else {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'buy' AND (order_price >= $2 OR price_type = 'market');`, sentThing.Ticker, currentQuote.MarketPrice)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'buy' AND (order_price >= $2 OR price_type = 'market');`, sentThing.Ticker, newPrice)
 		}
 	} else {
 		if opposingDirect == "sell" {
@@ -260,7 +261,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func tradePriceUpdate(ctx context.Context, dbTx pgx.Tx, currentQuote Quote, theTrade tradeFormat) error {
+func tradePriceUpdate(ctx context.Context, dbTx pgx.Tx, currentQuote Quote, theTrade tradeFormat) (float32, error) {
 	movementPercent := float32(theTrade.Quantity) / float32(currentQuote.TotalVolume)
 	var priceDiffPercent float32 = 0.0
 	var newMarketCap float32 = 0.0
@@ -274,9 +275,9 @@ func tradePriceUpdate(ctx context.Context, dbTx pgx.Tx, currentQuote Quote, theT
 	log.Println(newMarketCap)
 	err := dbTx.QueryRow(ctx, `UPDATE stocks SET market_cap = $1, share_price = $2 WHERE ticker = $3`, newMarketCap, (newMarketCap / float32(currentQuote.TotalVolume)), theTrade.Ticker).Scan()
 	if err != nil && err != pgx.ErrNoRows {
-		return err
+		return 0, err
 	}
-	return nil
+	return (newMarketCap / float32(currentQuote.TotalVolume)), nil
 }
 
 func updateTradeObjs(oppTrade tradeFormat, sentThing tradeFormat) (int, tradeFormat, tradeFormat) {

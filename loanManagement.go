@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -80,16 +81,64 @@ func (Env env) getLoan(w http.ResponseWriter, r *http.Request) {
 	var theLoan loanFormat
 	theLoan.LoanId = loanId
 	reqNat := r.Header.Get("NationName")
-	err := Env.DBPool.QueryRow(r.Context(), `SELECT lendee, lender, lent_value, rate, current_value FROM loans WHERE loan_id = $2`, loanId, loanId).Scan(&theLoan.Lendee, &theLoan.Lender, &theLoan.LentValue, &theLoan.LoanRate, &theLoan.CurrentValue)
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT lendee, lender, lent_value, rate, current_value FROM loans WHERE loan_id = $1`, loanId).Scan(&theLoan.Lendee, &theLoan.Lender, &theLoan.LentValue, &theLoan.LoanRate, &theLoan.CurrentValue)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Get loan Err", err)
 		return
 	}
-	if theLoan.Lendee != reqNat && theLoan.Lender != reqNat {
+	var possibleRegions []string
+	var sameThing bool
+	bothAccts, err := Env.DBPool.Query(r.Context(), `SELECT account_name, account_type FROM accounts WHERE account_name = $1 OR account_name = $2`, theLoan.Lendee, theLoan.Lender)
+	defer bothAccts.Close()
+	for bothAccts.Next() {
+		if bothAccts.Err() != nil {
+			log.Println("getLoan perms err", err)
+			continue
+		}
+		var thisAccountName, thisAccountType string
+		err = bothAccts.Scan(&thisAccountName, &thisAccountType)
+		if err != nil {
+			log.Println("Some err", err)
+			continue
+		}
+		if thisAccountName == reqNat {
+			sameThing = true
+			break
+		}
+		if thisAccountType == "region" {
+			possibleRegions = append(possibleRegions, thisAccountName)
+		}
+	}
+	var livePerms bool = false
+	if !sameThing {
+		if len(possibleRegions) > 0 {
+			for _, region := range possibleRegions {
+				var perm string
+				err := Env.DBPool.QueryRow(r.Context(), `SELECT permission FROM nation_permissions WHERE nation_name = $1 AND region_name = $2`, reqNat, region).Scan(&perm)
+				if err != nil {
+					if err == pgx.ErrNoRows {
+						continue
+					}
+					w.WriteHeader(http.StatusInternalServerError)
+					log.Println("getLoan perm err", err)
+					return
+				}
+				if perm != "citizen" {
+					livePerms = true
+					break
+				}
+			}
+		} else {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+	}
+	if (theLoan.Lendee != reqNat && theLoan.Lender != reqNat) && !livePerms {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -144,6 +193,170 @@ func getAccountLoans(ctx context.Context, dbConn *pgxpool.Conn, accountName stri
 	return returnArray, nil
 }
 
+func (Env env) payLoan(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	var theLoan loanFormat
+	sentData := struct {
+		LoanId      string
+		RepayAmount float32
+	}{}
+	err := decoder.Decode(&sentData)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	dbConn, err := Env.DBPool.Acquire(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("payLoan DB Err", err)
+		return
+	}
+	defer dbConn.Release()
+	err = dbConn.QueryRow(r.Context(), `SELECT lendee, lender, current_value FROM loans WHERE loan_id = $1`, sentData.LoanId).Scan(&theLoan.Lendee, &theLoan.Lender, &theLoan.CurrentValue)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("payLoan getloan Err", err)
+		return
+	}
+	var accType string
+	err = dbConn.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, theLoan.Lendee).Scan(&accType)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Println("payLoan perm err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if strings.EqualFold(accType, "region") {
+		var perm string
+		err = dbConn.QueryRow(r.Context(), `SELECT permission FROM nation_permissions WHERE nation_name = $1 AND region_name = $2;`, r.Header.Get("NationName"), theLoan.Lendee).Scan(&perm)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			log.Println("payLoan perm err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if perm == "citizen" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+	} else {
+		if theLoan.Lendee != r.Header.Get("NationName") {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+	}
+	dbTx, err := dbConn.Begin(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("payLoan tx err", err)
+		return
+	}
+	defer dbTx.Rollback(r.Context())
+	if sentData.RepayAmount >= theLoan.CurrentValue {
+		sentData.RepayAmount = theLoan.CurrentValue
+		err = dbTx.QueryRow(r.Context(), `DELETE FROM loans WHERE loan_id = $1`, sentData.LoanId).Scan()
+		if err != nil && err != pgx.ErrNoRows {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Println("payLoan DB Err", err)
+			return
+		}
+	} else {
+		err = dbTx.QueryRow(r.Context(), `UPDATE loans SET current_value = current_value - $1 WHERE loan_id = $2`, sentData.RepayAmount, sentData.LoanId).Scan()
+		if err != nil && err != pgx.ErrNoRows {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Println("payLoan DB Err", err)
+			return
+		}
+	}
+	cashMessage := `Loan Repayment - ID ` + sentData.LoanId
+	err = Env.handCashTransaction(&transactionFormat{Sender: theLoan.Lendee, Receiver: theLoan.Lender, Value: sentData.RepayAmount, Message: cashMessage}, r.Context(), dbTx)
+	if err != nil {
+		log.Println("loanRepay cashTransact err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = dbTx.Commit(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("payLoan commit err", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (Env env) writeOffLoan(w http.ResponseWriter, r *http.Request) {
+	loanId := r.PathValue("loanId")
+	var lender string
+	dbConn, err := Env.DBPool.Acquire(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("writeOff DB Err", err)
+		return
+	}
+	err = dbConn.QueryRow(r.Context(), `SELECT lender FROM loans WHERE loan_id = $1`, loanId).Scan(&lender)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("writeOff Query Err", err)
+		return
+	}
+	log.Println(lender)
+	var accType string
+	err = dbConn.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, lender).Scan(&accType)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("writeOff Query Err", err)
+		return
+	}
+	if accType == "region" {
+		var natPerm string
+		err = dbConn.QueryRow(r.Context(), `SELECT permission FROM nation_permissions WHERE nation_name = $1 AND region_name = $2`, r.Header.Get("NationName"), lender).Scan(&natPerm)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Println("writeOff Query Err", err)
+			return
+		}
+		log.Println(natPerm)
+		if natPerm == "citizen" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+	} else {
+		if lender != r.Header.Get("NationName") {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+	}
+	err = dbConn.QueryRow(r.Context(), `DELETE FROM loans WHERE loan_id = $1`, loanId).Scan()
+	if err != nil && err != pgx.ErrNoRows {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("writeOff Del Err", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 func (Env env) updateLoanValues(ctx context.Context) error {
 	dbConn, err := Env.DBPool.Acquire(ctx)
 	if err != nil {
@@ -172,5 +385,5 @@ func (Env env) updateLoanValues(ctx context.Context) error {
 		log.Println("Loan update job err", err)
 		return err
 	}
-	return err
+	return nil
 }

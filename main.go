@@ -68,7 +68,7 @@ func main() {
 	)
 	cronSched.NewJob(
 		gocron.CronJob(`5 00 * * *`, false),
-		gocron.NewTask(env.updateLoanValues, primCtx),
+		gocron.NewTask(primaryEnv.updateLoanValues, primCtx),
 	)
 	theMux := http.NewServeMux()
 	theMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +96,12 @@ func main() {
 	})
 	theMux.HandleFunc("POST /loan/issue", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedWrapper(w, r, primaryEnv.manualLoanIssue)
+	})
+	theMux.HandleFunc("POST /loan/repay", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.payLoan)
+	})
+	theMux.HandleFunc("DELETE /loan/{loanId}", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.writeOffLoan)
 	})
 	theMux.HandleFunc("GET /nation/{natName}", primaryEnv.nationInfo)
 	theMux.HandleFunc("GET /region/{region}", func(w http.ResponseWriter, r *http.Request) {
