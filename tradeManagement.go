@@ -195,14 +195,12 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		err = Env.handCashTransaction(&cashTransfer, r.Context(), dbTx)
 		if err != nil {
 			log.Println("Cash Err", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			continue
 		}
 		err = transferShares(r.Context(), dbTx, shareTrans)
 		if err != nil {
 			log.Println("Shares Err", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			continue
 		}
 		if updOppTrade.Quantity == 0 {
 			err = dbTx.QueryRow(r.Context(), `DELETE FROM open_orders WHERE trade_id = $1`, oppTrade.TradeId).Scan()
@@ -211,8 +209,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil && err != pgx.ErrNoRows {
 			log.Println(`Opposite Update Err`, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			continue
 		}
 	}
 	log.Println(updSentThing.Quantity)
