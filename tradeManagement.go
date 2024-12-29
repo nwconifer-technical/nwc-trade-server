@@ -111,7 +111,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.EqualFold(sentThing.Direction, "buy") {
 		if strings.EqualFold(sentThing.PriceType, "market") {
-			if (sentThing.Price*1.5)*float32(sentThing.Quantity) > float32(traderCash) {
+			if (sentThing.Price*1.15)*float32(sentThing.Quantity) > float32(traderCash) {
 				w.WriteHeader(http.StatusUnauthorized)
 				log.Println("Risk unauthed")
 				return
