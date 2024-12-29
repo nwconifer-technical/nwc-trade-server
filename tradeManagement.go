@@ -109,17 +109,19 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	if strings.EqualFold(sentThing.PriceType, "market") {
 		sentThing.Price = currentQuote.MarketPrice
 	}
-	if strings.EqualFold(sentThing.PriceType, "market") {
-		if (sentThing.Price*1.5)*float32(sentThing.Quantity) > float32(traderCash) {
-			w.WriteHeader(http.StatusUnauthorized)
-			log.Println("Risk unauthed")
-			return
-		}
-	} else {
-		if (sentThing.Price)*float32(sentThing.Quantity) > float32(traderCash) {
-			w.WriteHeader(http.StatusUnauthorized)
-			log.Println("Risk unauthed")
-			return
+	if strings.EqualFold(sentThing.Direction, "buy") {
+		if strings.EqualFold(sentThing.PriceType, "market") {
+			if (sentThing.Price*1.5)*float32(sentThing.Quantity) > float32(traderCash) {
+				w.WriteHeader(http.StatusUnauthorized)
+				log.Println("Risk unauthed")
+				return
+			}
+		} else {
+			if (sentThing.Price)*float32(sentThing.Quantity) > float32(traderCash) {
+				w.WriteHeader(http.StatusUnauthorized)
+				log.Println("Risk unauthed")
+				return
+			}
 		}
 	}
 
