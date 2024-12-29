@@ -94,6 +94,10 @@ func (Env env) getLoan(w http.ResponseWriter, r *http.Request) {
 	var possibleRegions []string
 	var sameThing bool
 	bothAccts, err := Env.DBPool.Query(r.Context(), `SELECT account_name, account_type FROM accounts WHERE account_name = $1 OR account_name = $2`, theLoan.Lendee, theLoan.Lender)
+	if err != nil && err != pgx.ErrNoRows {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	defer bothAccts.Close()
 	for bothAccts.Next() {
 		if bothAccts.Err() != nil {
@@ -142,7 +146,29 @@ func (Env env) getLoan(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	encoder.Encode(theLoan)
+	loanTransacts, err := Env.DBPool.Query(r.Context(), `SELECT timecode, sender, receiver ,transaction_value, transaction_message FROM cash_transactions WHERE transaction_message LIKE $1`, ("%ID " + loanId))
+	if err != nil && err != pgx.ErrNoRows {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer loanTransacts.Close()
+	var theTransacts []transactionFormat
+	for loanTransacts.Next() {
+		curTransact := transactionFormat{}
+		err := loanTransacts.Scan(&curTransact.Timecode, &curTransact.Sender, &curTransact.Receiver, &curTransact.Value, &curTransact.Message)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		theTransacts = append(theTransacts, curTransact)
+	}
+	encoder.Encode(struct {
+		TheLoan       loanFormat
+		LoanTransacts []transactionFormat
+	}{
+		TheLoan:       theLoan,
+		LoanTransacts: theTransacts,
+	})
 }
 
 func (Env env) getLoans(w http.ResponseWriter, r *http.Request) {
