@@ -51,7 +51,8 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var account_type string
-	err = dbTx.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, sentThing.Sender).Scan(&account_type)
+	var traderCash float32
+	err = dbTx.QueryRow(r.Context(), `SELECT account_type, cash_in_hand FROM accounts WHERE account_name = $1`, sentThing.Sender).Scan(&account_type, &traderCash)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -108,6 +109,20 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	if strings.EqualFold(sentThing.PriceType, "market") {
 		sentThing.Price = currentQuote.MarketPrice
 	}
+	if strings.EqualFold(sentThing.PriceType, "market") {
+		if (sentThing.Price*1.5)*float32(sentThing.Quantity) > float32(traderCash) {
+			w.WriteHeader(http.StatusUnauthorized)
+			log.Println("Risk unauthed")
+			return
+		}
+	} else {
+		if (sentThing.Price)*float32(sentThing.Quantity) > float32(traderCash) {
+			w.WriteHeader(http.StatusUnauthorized)
+			log.Println("Risk unauthed")
+			return
+		}
+	}
+
 	err = tradePriceUpdate(r.Context(), dbTx, currentQuote, sentThing)
 	if err != nil {
 		log.Println("Update DB Err", err)
