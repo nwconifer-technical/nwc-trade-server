@@ -285,7 +285,7 @@ func updateTradeObjs(oppTrade tradeFormat, sentThing tradeFormat) (int, tradeFor
 	newOppTrade := oppTrade.copy()
 	newSentThing := sentThing.copy()
 	if sentThing.Quantity > oppTrade.Quantity {
-		transferAmount = newSentThing.Quantity - oppTrade.Quantity
+		transferAmount = oppTrade.Quantity
 		newSentThing.Quantity -= oppTrade.Quantity
 		newOppTrade.Quantity = 0
 	} else if sentThing.Quantity == oppTrade.Quantity {
