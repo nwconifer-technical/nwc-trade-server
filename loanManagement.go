@@ -146,7 +146,7 @@ func (Env env) getLoan(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	loanTransacts, err := Env.DBPool.Query(r.Context(), `SELECT timecode, sender, receiver ,transaction_value, transaction_message FROM cash_transactions WHERE transaction_message LIKE $1`, ("%ID " + loanId))
+	loanTransacts, err := Env.DBPool.Query(r.Context(), `SELECT timecode, sender, receiver ,transaction_value, transaction_message FROM cash_transactions WHERE transaction_message LIKE $1 ORDER BY timecode DESC`, ("%ID " + loanId))
 	if err != nil && err != pgx.ErrNoRows {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -229,6 +229,7 @@ func (Env env) payLoan(w http.ResponseWriter, r *http.Request) {
 	err := decoder.Decode(&sentData)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		log.Println("repay decode err", err)
 		return
 	}
 	dbConn, err := Env.DBPool.Acquire(r.Context())

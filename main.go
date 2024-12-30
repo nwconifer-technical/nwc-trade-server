@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"cloud.google.com/go/firestore"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,12 +18,10 @@ import (
 var HashCost,
 	DbString,
 	ProjId,
-	ExtraKeyString,
-	FirestoreString string
+	ExtraKeyString string
 
 type env struct {
 	DBPool         *pgxpool.Pool
-	FSClient       *firestore.Client
 	CashCollection string
 	HashCost       int
 	KeyString      string
@@ -52,11 +49,6 @@ func main() {
 	}
 	testConn.Release()
 	defer primaryEnv.DBPool.Close()
-	primaryEnv.FSClient, err = firestore.NewClientWithDatabase(primCtx, ProjId, FirestoreString)
-	if err != nil {
-		log.Panic(err)
-	}
-	defer primaryEnv.FSClient.Close()
 
 	cronSched, err := gocron.NewScheduler()
 	if err != nil {
@@ -88,6 +80,7 @@ func main() {
 		primaryEnv.securedWrapper(w, r, primaryEnv.outerCashHandler)
 	})
 	theMux.HandleFunc("GET /cash/details/{natName}", primaryEnv.nationCashDetails)
+	theMux.HandleFunc("GET /cash/quick/{natName}", primaryEnv.nationCashQuick)
 	theMux.HandleFunc("GET /loans", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedWrapper(w, r, primaryEnv.getLoans)
 	})

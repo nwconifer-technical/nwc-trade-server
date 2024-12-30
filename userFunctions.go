@@ -158,3 +158,24 @@ func (Env env) nationCashDetails(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	encoder.Encode(theReturn)
 }
+
+func (Env env) nationCashQuick(w http.ResponseWriter, r *http.Request) {
+	encoder := json.NewEncoder(w)
+	theNation := r.PathValue("natName")
+	theReturn := struct {
+		AcctName   string
+		CashInHand float32
+	}{
+		AcctName: theNation,
+	}
+	err := Env.DBPool.QueryRow(r.Context(), `SELECT cash_in_hand FROM accounts WHERE account_name = $1;`, theNation).Scan(&theReturn.CashInHand)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	encoder.Encode(theReturn)
+}
