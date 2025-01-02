@@ -17,21 +17,18 @@ import (
 
 var HashCost,
 	DbString,
-	ProjId,
 	ExtraKeyString string
 
 type env struct {
-	DBPool         *pgxpool.Pool
-	CashCollection string
-	HashCost       int
-	KeyString      string
+	DBPool    *pgxpool.Pool
+	HashCost  int
+	KeyString string
 }
 
 func main() {
 	primCtx := context.Background()
 	var primaryEnv env = env{
-		CashCollection: "cashTransactions",
-		KeyString:      ExtraKeyString,
+		KeyString: ExtraKeyString,
 	}
 	var err error
 	primaryEnv.HashCost, _ = strconv.Atoi(HashCost)
@@ -76,6 +73,9 @@ func main() {
 		primaryEnv.securedWrapper(w, r, primaryEnv.registerRegion)
 	})
 	theMux.HandleFunc("POST /verify/nation", primaryEnv.userVerification)
+	theMux.HandleFunc("POST /nation/permission", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.updatePerm)
+	})
 	theMux.HandleFunc("POST /cash/transaction", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedWrapper(w, r, primaryEnv.outerCashHandler)
 	})

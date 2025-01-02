@@ -41,7 +41,12 @@ CREATE TABLE IF NOT EXISTS stocks (
     region TEXT REFERENCES accounts(account_name),
     market_cap NUMERIC(100,2) NOT NULL DEFAULT 0.0 CHECK(market_cap >= 0.0),
     total_share_volume INT NOT NULL DEFAULT 0,
-    share_price NUMERIC(100,2)
+    share_price NUMERIC(100,2),
+    share_stat1 NUMERIC(100,2), -- Most nations
+    share_stat2 NUMERIC(100,2), -- Economic Output
+    share_stat3 NUMERIC(100,2), -- Average Income
+    share_stat4 NUMERIC(100,2), -- WA Endorsements 
+    share_stat5 NUMERIC(100,2)  -- Pro-Market
 );
 
 CREATE TABLE IF NOT EXISTS stock_prices (
