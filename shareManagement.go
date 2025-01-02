@@ -3,13 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"encoding/xml"
-	"io"
 	"log"
 	"net/http"
 	"time"
 
-	"github.com/gosimple/slug"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -68,72 +65,6 @@ func createShares(ctx context.Context, dbTx pgx.Tx, region string, numberofShare
 	}
 	err = dbTx.QueryRow(ctx, `UPDATE stocks SET total_share_volume = total_share_volume + $1, share_price = $2 WHERE ticker = $3`, numberofShares, market_cap/newVol, ticker).Scan()
 	return err
-}
-
-func buildMarketCap(region string) (float32, error) {
-	// Initial Market Cap Mix
-	// Most nations - 255 - NWC 90.00, TNP 6227.00
-	// Economic Output - 76 - NWC 670783000000000, TNP 486764000000000
-	// Average Income - 74 - NWC 126798, TNP 168437
-	// WA Endorsements - 66 - NWC 4.22, TNP 26.13
-	// Pro-Market - 48 - NWC 3.90, TNP 24.88
-	// Mean take of all and multiplied by the "TNP Market Cap"
-	// The API Call
-	// https://www.nationstates.net/cgi-bin/api.cgi?region={REGION_SLUGIFIED}&q=census&scale=255+76+74+66+48
-	type Scale struct {
-		Id    int     `xml:"id,attr"`
-		Score float32 `xml:"SCORE"`
-	}
-
-	type Census struct {
-		Region string  `xml:"id,attr"`
-		Scores []Scale `xml:"CENSUS>SCALE"`
-	}
-	const TNPMarkCap = 500000000
-	var TNPVals map[int]float32 = map[int]float32{
-		255: 6227,
-		76:  486764000000000,
-		74:  168437,
-		66:  26.13,
-		48:  24.88,
-	}
-	client := &http.Client{}
-	regionSlugified := slug.Substitute(region, map[string]string{
-		" ": "_",
-	})
-	reqString := `https://www.nationstates.net/cgi-bin/api.cgi?region=` + regionSlugified + `&q=census&scale=255+76+74+66+48`
-	log.Println(reqString)
-	req, err := http.NewRequest(http.MethodGet, reqString, nil)
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Set("User-Agent", "NWConifer Finance Application, by Gallaton")
-	resp, err := client.Do(req)
-	if resp.StatusCode != 200 {
-		log.Println(resp.StatusCode)
-		log.Println("Request Err", err)
-		return 0, err
-	}
-	if err != nil {
-		return 0, err
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, err
-	}
-	var output Census
-	err = xml.Unmarshal(body, &output)
-	if err != nil {
-		log.Println("Unmarshal Err", err)
-		return 0, err
-	}
-
-	var runingTotal float32
-	for i := 0; i < len(output.Scores); i++ {
-		currentOne := output.Scores[i]
-		runingTotal += currentOne.Score / TNPVals[currentOne.Id]
-	}
-	return (runingTotal / 5) * TNPMarkCap, nil
 }
 
 type Quote struct {
@@ -293,7 +224,10 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 			theBook.Sells = append(theBook.Sells, thisTrade)
 		}
 	}
-	theEncoder.Encode(theBook)
+	err = theEncoder.Encode(theBook)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 type holdingFormat struct {
@@ -310,7 +244,7 @@ type portfolioFormat struct {
 
 func getAcctOpenOrders(ctx context.Context, dbConn *pgxpool.Conn, acct string) ([]tradeFormat, error) {
 	var trades []tradeFormat
-	tradeReader, err := dbConn.Query(ctx, `SELECT trade_id, ticker, quant, order_direction, price_type, order_price FROM open_orders WHERE trader = $1;`, acct)
+	tradeReader, err := dbConn.Query(ctx, `SELECT trade_id, ticker, quant, order_direction, price_type, order_price FROM open_orders WHERE trader = $1 ORDER BY ticker;`, acct)
 	if err != nil {
 		return nil, err
 	}

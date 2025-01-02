@@ -59,6 +59,10 @@ func main() {
 		gocron.CronJob(`5 00 * * *`, false),
 		gocron.NewTask(primaryEnv.updateLoanValues, primCtx),
 	)
+	cronSched.NewJob(
+		gocron.CronJob(`15 0 * * *`, false),
+		gocron.NewTask(primaryEnv.runRealign, primCtx),
+	)
 	theMux := http.NewServeMux()
 	theMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello!"))
@@ -180,7 +184,7 @@ func main() {
 		Handler:     theMux,
 		ReadTimeout: 5 * time.Second,
 	}
-	cronSched.Start()
+	// cronSched.Start()
 	log.Println("NWC Trade Server Started")
 	err = theServer.ListenAndServe()
 	defer theServer.Shutdown(primCtx)

@@ -126,7 +126,6 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newPrice, err := tradePriceUpdate(r.Context(), dbTx, currentQuote, sentThing)
-	log.Println(newPrice, sentThing.Price)
 	if err != nil {
 		log.Println("Update DB Err", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -178,7 +177,6 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		var updOppTrade tradeFormat
 		transferAmount, updOppTrade, updSentThing = updateTradeObjs(oppTrade, sentThing)
 		cashValue := sentThing.Price * float32(transferAmount)
-		log.Println(oppTrade)
 		var cashTransfer transactionFormat
 		var shareTrans shareTransfer
 		if strings.EqualFold(sentThing.Direction, "buy") {
@@ -230,11 +228,9 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 	}
-	log.Println(updSentThing.Quantity)
 	if updSentThing.Ticker == "" {
 		updSentThing = sentThing.copy()
 	}
-	log.Println(updSentThing.Quantity)
 	if updSentThing.Quantity > 0 {
 		err = dbTx.QueryRow(r.Context(), `INSERT INTO open_orders (ticker, trader, quant, order_direction, price_type, order_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING trade_id`, sentThing.Ticker, sentThing.Sender, sentThing.Quantity, strings.ToLower(sentThing.Direction), sentThing.PriceType, sentThing.Price).Scan(&enteredTradeId)
 		if err != nil {
