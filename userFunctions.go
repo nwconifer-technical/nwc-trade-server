@@ -137,7 +137,6 @@ type cashReturn struct {
 }
 
 func (Env env) nationCashDetails(w http.ResponseWriter, r *http.Request) {
-	log.Println("Requested cash details")
 	encoder := json.NewEncoder(w)
 	theReturn := cashReturn{}
 	theNation := r.PathValue("natName")

@@ -79,17 +79,24 @@ func realignPricesWithNS(dbConn *pgxpool.Conn, ctx context.Context) error {
 			66:  share_stat4,
 			48:  share_stat5,
 		}
+		var updatedVals map[int]float32 = map[int]float32{
+			255: 0,
+			76:  0,
+			74:  0,
+			66:  0,
+			48:  0,
+		}
 		var percentMove float32
-		var updatedVals []float32
 		for i := 0; i < len(output.Scores); i++ {
 			currentOne := output.Scores[i]
 			log.Println(currentOne)
 			percDiff := (currentOne.Score - existingVals[currentOne.Id]) / existingVals[currentOne.Id]
 			percentMove += percDiff
-			updatedVals = append(updatedVals, currentOne.Score)
+			updatedVals[currentOne.Id] = currentOne.Score
 		}
-
-		allShareUpdates.Queue(`UPDATE stocks SET market_cap = $1, share_price = $2, share_stat1=$3, share_stat2=$4, share_stat3=$5, share_stat4=$6, share_stat5=$7 WHERE ticker = $8`, (curMarketCap * (1 + percentMove)), (curMarketCap*(1+percentMove))/1000000, updatedVals[0], updatedVals[1], updatedVals[2], updatedVals[3], updatedVals[4], ticker)
+		newMarketC := curMarketCap * (1 + percentMove)
+		newShareP := newMarketC / 1000000
+		allShareUpdates.Queue(`UPDATE stocks SET market_cap = $1, share_price = $2, share_stat1=$3, share_stat2=$4, share_stat3=$5, share_stat4=$6, share_stat5=$7 WHERE ticker = $8`, newMarketC, newShareP, updatedVals[255], updatedVals[76], updatedVals[74], updatedVals[66], updatedVals[48], ticker)
 	}
 	return dbConn.SendBatch(ctx, &allShareUpdates).Close()
 }

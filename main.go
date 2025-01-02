@@ -61,7 +61,7 @@ func main() {
 	)
 	cronSched.NewJob(
 		gocron.CronJob(`15 0 * * *`, false),
-		gocron.NewTask(primaryEnv.realignPricesWithNS, primCtx),
+		gocron.NewTask(primaryEnv.runRealign, primCtx),
 	)
 	theMux := http.NewServeMux()
 	theMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
