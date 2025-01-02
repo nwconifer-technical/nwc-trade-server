@@ -35,13 +35,13 @@ func (Env env) registerRegion(w http.ResponseWriter, r *http.Request) {
 		log.Print("DB Err 2", err)
 		return
 	}
-	regionMarketCap, err := buildMarketCap(newRegion.RegionName)
+	regionMarketCap, someVals, err := buildMarketCap(newRegion.RegionName)
 	if err != nil {
 		log.Println("Market Cap Err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	err = ourConn.QueryRow(r.Context(), `INSERT INTO stocks (ticker, region, market_cap, total_share_volume, share_price) VALUES ($1, $2, $3, 0, 0);`, newRegion.RegionTicker, newRegion.RegionName, regionMarketCap).Scan()
+	err = ourConn.QueryRow(r.Context(), `INSERT INTO stocks (ticker, region, market_cap, total_share_volume, share_price, share_stat1, share_stat2, share_stat3, share_stat4, share_stat5) VALUES ($1, $2, $3, 0, 0, $4, $5, $6, $7, $8);`, newRegion.RegionTicker, newRegion.RegionName, regionMarketCap, someVals[255], someVals[76], someVals[74], someVals[66], someVals[48]).Scan()
 	if err != nil && err != pgx.ErrNoRows {
 		log.Println("DB Err 3", err)
 		w.WriteHeader(http.StatusInternalServerError)

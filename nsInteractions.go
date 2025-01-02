@@ -47,7 +47,6 @@ func realignPricesWithNS(dbConn *pgxpool.Conn, ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		log.Println("Testing", region)
 		req, err := http.NewRequest(http.MethodGet, `https://www.nationstates.net/cgi-bin/api.cgi?region=`+slug.Substitute(region, map[string]string{
 			" ": "_",
 		})+`&q=census&scale=255+76+74+66+48`, nil)
@@ -89,10 +88,15 @@ func realignPricesWithNS(dbConn *pgxpool.Conn, ctx context.Context) error {
 		var percentMove float32
 		for i := 0; i < len(output.Scores); i++ {
 			currentOne := output.Scores[i]
-			log.Println(currentOne)
 			percDiff := (currentOne.Score - existingVals[currentOne.Id]) / existingVals[currentOne.Id]
 			percentMove += percDiff
 			updatedVals[currentOne.Id] = currentOne.Score
+		}
+		percentMove = percentMove * 0.2
+		if percentMove > 0.2 {
+			percentMove = 0.2
+		} else if percentMove < -0.2 {
+			percentMove = -0.2
 		}
 		newMarketC := curMarketCap * (1 + percentMove)
 		newShareP := newMarketC / 1000000
@@ -101,7 +105,7 @@ func realignPricesWithNS(dbConn *pgxpool.Conn, ctx context.Context) error {
 	return dbConn.SendBatch(ctx, &allShareUpdates).Close()
 }
 
-func buildMarketCap(region string) (float32, error) {
+func buildMarketCap(region string) (float32, map[int]float32, error) {
 	// Initial Market Cap Mix
 	// Most nations - 255 - NWC 90.00, TNP 6227.00
 	// Economic Output - 76 - NWC 670783000000000, TNP 486764000000000
@@ -128,32 +132,40 @@ func buildMarketCap(region string) (float32, error) {
 	log.Println(reqString)
 	req, err := http.NewRequest(http.MethodGet, reqString, nil)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	req.Header.Set("User-Agent", "NWConifer Finance Application, by Gallaton")
 	resp, err := client.Do(req)
 	if resp.StatusCode != 200 {
 		log.Println(resp.StatusCode)
 		log.Println("Request Err", err)
-		return 0, err
+		return 0, nil, err
 	}
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	var output Census
 	err = xml.Unmarshal(body, &output)
 	if err != nil {
 		log.Println("Unmarshal Err", err)
-		return 0, err
+		return 0, nil, err
 	}
 	var runingTotal float32
+	var theVals map[int]float32 = map[int]float32{
+		255: 0,
+		76:  0,
+		74:  0,
+		66:  0,
+		48:  0,
+	}
 	for i := 0; i < len(output.Scores); i++ {
 		currentOne := output.Scores[i]
 		runingTotal += currentOne.Score / TNPVals[currentOne.Id]
+		theVals[currentOne.Id] = currentOne.Score
 	}
-	return (runingTotal / 5) * TNPMarkCap, nil
+	return (runingTotal / 5) * TNPMarkCap, theVals, nil
 }

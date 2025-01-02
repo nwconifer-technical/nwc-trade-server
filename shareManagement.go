@@ -224,7 +224,10 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 			theBook.Sells = append(theBook.Sells, thisTrade)
 		}
 	}
-	theEncoder.Encode(theBook)
+	err = theEncoder.Encode(theBook)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 type holdingFormat struct {
