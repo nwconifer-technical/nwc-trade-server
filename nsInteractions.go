@@ -88,7 +88,12 @@ func realignPricesWithNS(dbConn *pgxpool.Conn, ctx context.Context) error {
 		var percentMove float32
 		for i := 0; i < len(output.Scores); i++ {
 			currentOne := output.Scores[i]
-			percDiff := (currentOne.Score - existingVals[currentOne.Id]) / existingVals[currentOne.Id]
+			var percDiff float32
+			if existingVals[currentOne.Id] != 0 {
+				percDiff = (currentOne.Score - existingVals[currentOne.Id]) / existingVals[currentOne.Id]
+			} else {
+				percDiff = 0
+			}
 			percentMove += percDiff
 			updatedVals[currentOne.Id] = currentOne.Score
 		}
