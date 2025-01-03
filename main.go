@@ -184,7 +184,7 @@ func main() {
 		Handler:     theMux,
 		ReadTimeout: 5 * time.Second,
 	}
-	// cronSched.Start()
+	cronSched.Start()
 	log.Println("NWC Trade Server Started")
 	err = theServer.ListenAndServe()
 	defer theServer.Shutdown(primCtx)
