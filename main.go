@@ -107,7 +107,12 @@ func main() {
 	theMux.HandleFunc("GET /list/nations", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		headEncoder := json.NewEncoder(w)
-		dbRows, err := primaryEnv.DBPool.Query(r.Context(), `SELECT account_name FROM accounts WHERE account_type = 'nation' ORDER BY cash_in_hand DESC LIMIT 25;`)
+		dbConn, err := primaryEnv.DBPool.Acquire(r.Context())
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		dbRows, err := dbConn.Query(r.Context(), `SELECT account_name, cash_in_hand FROM accounts WHERE account_type = 'nation' LIMIT 25;`)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				w.WriteHeader(http.StatusNotFound)
@@ -117,21 +122,29 @@ func main() {
 			return
 		}
 		defer dbRows.Close()
+		type NatNet struct {
+			Name       string
+			CashInHand float32
+			NetWorth   float32
+		}
 		objToRet := struct {
-			Nations []string
+			Nations []NatNet
 		}{}
-		for {
-			newRow := dbRows.Next()
-			if !newRow {
-				break
-			}
-			var currNat string
-			err = dbRows.Scan(&currNat)
+		for dbRows.Next() {
+			var currNat NatNet
+			err = dbRows.Scan(&currNat.Name, &currNat.CashInHand)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			objToRet.Nations = append(objToRet.Nations, currNat)
+		}
+		for i := 0; i < len(objToRet.Nations); i++ {
+			objToRet.Nations[i].NetWorth, err = buildNetWorth(r.Context(), dbConn, objToRet.Nations[i].Name, objToRet.Nations[i].CashInHand)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		}
 		headEncoder.Encode(objToRet)
 	})

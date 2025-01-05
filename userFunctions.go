@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -133,20 +135,54 @@ func (Env env) nationInfo(w http.ResponseWriter, r *http.Request) {
 type cashReturn struct {
 	CashInHand   float32             `json:"handCash"`
 	CashInEscrow float32             `json:"escrowCash"`
+	NetWorth     float32             `json:"netWorth"`
 	Transactions []transactionFormat `json:"transactions"`
+}
+
+func buildNetWorth(ctx context.Context, dbConn *pgxpool.Conn, user string, cashValue float32) (float32, error) {
+	var shareGetter, debtGetter *float32
+	err := dbConn.QueryRow(ctx, `SELECT SUM(share_quant*share_price) as shareWorth FROM stock_holdings, stocks WHERE stocks.ticker = stock_holdings.ticker AND stock_holdings.account_name = $1`, user).Scan(&shareGetter)
+	if err != nil {
+		return 0, err
+	}
+	err = dbConn.QueryRow(ctx, `SELECT SUM(current_value) as debtValue FROM loans where lendee = $1`, user).Scan(&debtGetter)
+	var shareValue, debtValue float32
+	if shareGetter == nil {
+		shareValue = 0
+	} else {
+		shareValue = *shareGetter
+	}
+	if debtGetter == nil {
+		debtValue = 0
+	} else {
+		debtValue = *debtGetter
+	}
+	return ((cashValue + shareValue) - debtValue), err
 }
 
 func (Env env) nationCashDetails(w http.ResponseWriter, r *http.Request) {
 	encoder := json.NewEncoder(w)
 	theReturn := cashReturn{}
 	theNation := r.PathValue("natName")
-	err := Env.DBPool.QueryRow(r.Context(), `SELECT cash_in_hand, cash_in_escrow FROM accounts WHERE account_name = $1;`, theNation).Scan(&theReturn.CashInHand, &theReturn.CashInEscrow)
+	dbConn, err := Env.DBPool.Acquire(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer dbConn.Release()
+	err = dbConn.QueryRow(r.Context(), `SELECT cash_in_hand, cash_in_escrow FROM accounts WHERE account_name = $1;`, theNation).Scan(&theReturn.CashInHand, &theReturn.CashInEscrow)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	theReturn.NetWorth, err = buildNetWorth(r.Context(), dbConn, theNation, theReturn.CashInHand)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("NetWorth Err", err)
 		return
 	}
 	theReturn.Transactions, err = Env.getUserCashTransactions(r.Context(), theNation)
