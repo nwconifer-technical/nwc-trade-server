@@ -7,14 +7,7 @@ steps:
       - |
         go mod tidy
         make ciBuild
-    secretEnv:
-      [
-        "CASH_TRANSACT_COLL",
-        "DB_CONNECTSTRING",
-        "EXTRA_KEY_STRING",
-        "FIRESTORE_DB",
-        "HASH_COST",
-      ]
+    secretEnv: ["DB_CONNECTSTRING", "EXTRA_KEY_STRING", "HASH_COST"]
   - id: "Copy onto Box and Restart"
     name: "gcr.io/cloud-builders/gcloud"
     entrypoint: /bin/bash
@@ -31,13 +24,9 @@ options:
 
 availableSecrets:
   secretManager:
-    - versionName: projects/335883769512/secrets/CASH_TRANSACT_COLL/versions/2
-      env: "CASH_TRANSACT_COLL"
     - versionName: projects/335883769512/secrets/DB_CONNECTSTRING/versions/1
       env: "DB_CONNECTSTRING"
     - versionName: projects/335883769512/secrets/EXTRA_KEY_STRING/versions/1
       env: "EXTRA_KEY_STRING"
-    - versionName: projects/335883769512/secrets/FIRESTORE_DB/versions/1
-      env: "FIRESTORE_DB"
     - versionName: projects/335883769512/secrets/HASH_COST/versions/2
       env: "HASH_COST"
