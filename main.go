@@ -112,6 +112,7 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer dbConn.Release()
 		dbRows, err := dbConn.Query(r.Context(), `SELECT account_name, cash_in_hand FROM accounts WHERE account_type = 'nation' LIMIT 25;`)
 		if err != nil {
 			if err == pgx.ErrNoRows {
