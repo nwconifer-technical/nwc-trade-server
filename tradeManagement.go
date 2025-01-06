@@ -133,15 +133,15 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.EqualFold(sentThing.PriceType, "market") {
 		if opposingDirect == "sell" {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'sell' AND (order_price <= $2 OR price_type = 'market');`, sentThing.Ticker, newPrice)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'sell' AND (order_price <= $2 OR price_type = 'market') AND trader != $3;`, sentThing.Ticker, newPrice, sentThing.Sender)
 		} else {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'buy' AND (order_price >= $2 OR price_type = 'market');`, sentThing.Ticker, newPrice)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'buy' AND (order_price >= $2 OR price_type = 'market') AND trader != $3;`, sentThing.Ticker, newPrice, sentThing.Sender)
 		}
 	} else {
 		if opposingDirect == "sell" {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'sell' AND order_price <= $2;`, sentThing.Ticker, sentThing.Price)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'sell' AND order_price <= $2 AND trader != $3;`, sentThing.Ticker, sentThing.Price, sentThing.Sender)
 		} else {
-			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'buy' AND order_price >= $2;`, sentThing.Ticker, sentThing.Price)
+			openOrders, err = dbTx.Query(r.Context(), `SELECT trade_id, trader, quant FROM open_orders WHERE ticker = $1 AND order_direction = 'buy' AND order_price >= $2 AND trader != $3;`, sentThing.Ticker, sentThing.Price, sentThing.Sender)
 		}
 	}
 	if err != nil && err != pgx.ErrNoRows {
