@@ -80,7 +80,13 @@ func (Env env) marketQuote(w http.ResponseWriter, r *http.Request) {
 		Ticker: r.PathValue("ticker"),
 	}
 	theEncoder := json.NewEncoder(w)
-	err := Env.DBPool.QueryRow(r.Context(), `SELECT region, share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, sendingQuote.Ticker).Scan(&sendingQuote.Region, &sendingQuote.MarketPrice, &sendingQuote.TotalVolume, &sendingQuote.MarketCapitalisation)
+	dbConn, err := Env.DBPool.Acquire(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer dbConn.Release()
+	err = dbConn.QueryRow(r.Context(), `SELECT region, share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, sendingQuote.Ticker).Scan(&sendingQuote.Region, &sendingQuote.MarketPrice, &sendingQuote.TotalVolume, &sendingQuote.MarketCapitalisation)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -176,7 +182,13 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 	log.Println("Book Get Request")
 	var theBook = bookReturn{}
 	theEncoder := json.NewEncoder(w)
-	err := Env.DBPool.QueryRow(r.Context(), `SELECT region, share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, r.PathValue("ticker")).Scan(&theBook.CurrentQuote.Region, &theBook.CurrentQuote.MarketPrice, &theBook.CurrentQuote.TotalVolume, &theBook.CurrentQuote.MarketCapitalisation)
+	dbConn, err := Env.DBPool.Acquire(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer dbConn.Release()
+	err = dbConn.QueryRow(r.Context(), `SELECT region, share_price, total_share_volume, market_cap FROM stocks WHERE ticker = $1`, r.PathValue("ticker")).Scan(&theBook.CurrentQuote.Region, &theBook.CurrentQuote.MarketPrice, &theBook.CurrentQuote.TotalVolume, &theBook.CurrentQuote.MarketCapitalisation)
 	theBook.CurrentQuote.Ticker = r.PathValue("ticker")
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -187,7 +199,7 @@ func (Env env) returnAssetBook(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	theTrades, err := Env.DBPool.Query(r.Context(), `SELECT trade_id, trader, quant, order_direction, price_type, order_price FROM open_orders WHERE ticker = $1 ORDER BY order_price ASC`, r.PathValue("ticker"))
+	theTrades, err := dbConn.Query(r.Context(), `SELECT trade_id, trader, quant, order_direction, price_type, order_price FROM open_orders WHERE ticker = $1 ORDER BY order_price ASC`, r.PathValue("ticker"))
 	if err == pgx.ErrNoRows {
 		theBook.BookDepth = 0
 		theEncoder.Encode(theBook)
