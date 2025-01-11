@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -192,7 +193,45 @@ func main() {
 		primaryEnv.securedWrapper(w, r, primaryEnv.accountPortfolio)
 	})
 	theMux.HandleFunc("GET /shares/recentprices/{ticker}", primaryEnv.getRecentPriceHistory)
-
+	theMux.HandleFunc("GET /shares/allprices/{ticker}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "text/csv")
+		ticker := r.PathValue("ticker")
+		csvW := csv.NewWriter(w)
+		dbConn, err := primaryEnv.DBPool.Acquire(r.Context())
+		if err != nil {
+			log.Println("allPrices Err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		dbRows, err := dbConn.Query(r.Context(), `SELECT timecode, log_market_price FROM stock_prices WHERE ticker = $1 ORDER BY timecode ASC;`, ticker)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			log.Println("allPrices Err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		csvW.Write([]string{"Time", "Market Price"})
+		for dbRows.Next() {
+			var thisTCode time.Time
+			var thisPrice float64
+			err := dbRows.Scan(&thisTCode, &thisPrice)
+			if err != nil {
+				log.Println("allPrices Err", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			err = csvW.Write([]string{thisTCode.Format("2006-01-02 15:04:05"), (strconv.FormatFloat(thisPrice, 'f', 2, 32))})
+			if err != nil {
+				log.Println("allPrices Err", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+		csvW.Flush()
+	})
 	theServer := http.Server{
 		Addr:        `:8080`,
 		Handler:     theMux,
