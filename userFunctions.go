@@ -47,8 +47,14 @@ func (Env env) signupFunc(w http.ResponseWriter, r *http.Request) {
 		log.Println("DB Err 4", err)
 		return
 	}
-	_, err = Env.loanIssue(r.Context(), &loanFormat{LoanRate: 2.5, Lender: newUser.RegionName, Lendee: newUser.NationName, LentValue: 10000}, ourTx)
-	if err != nil {
+	err = ourTx.QueryRow(r.Context(), `INSERT INTO loans (lendee, lender, lent_value, rate, current_value) VALUES ($1, $2, $3, $4, $5);`, newUser.NationName, newUser.RegionName, 10000, 2.5, 10000).Scan()
+	if err != nil && err != pgx.ErrNoRows {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Loan Err", err)
+		return
+	}
+	err = ourTx.QueryRow(r.Context(), `UPDATE accounts SET cash_in_hand = cash_in_hand + 10000 WHERE account_name = $1`, newUser.NationName).Scan()
+	if err != nil && err != pgx.ErrNoRows {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Loan Err", err)
 		return
