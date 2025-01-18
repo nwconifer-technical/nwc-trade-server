@@ -399,7 +399,7 @@ func (Env env) updateLoanValues(ctx context.Context) error {
 	loanBatch := pgx.Batch{}
 	for theLoans.Next() {
 		var loanId int
-		var loanRate, curVal int32
+		var loanRate, curVal float32
 		err := theLoans.Scan(&loanId, &loanRate, &curVal)
 		if err != nil {
 			log.Println("Loan update err", err)

