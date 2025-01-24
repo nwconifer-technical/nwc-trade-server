@@ -385,6 +385,7 @@ func (Env env) writeOffLoan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (Env env) updateLoanValues(ctx context.Context) error {
+	log.Println("Updating Loan Values")
 	dbConn, err := Env.DBPool.Acquire(ctx)
 	if err != nil {
 		log.Println("Loan Update job err", err)

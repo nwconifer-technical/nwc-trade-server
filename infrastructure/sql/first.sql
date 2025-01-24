@@ -1,14 +1,17 @@
 CREATE TYPE accountType as ENUM ('region', 'nation');
 
+CREATE TYPE perm as ENUM ('admin', 'trader', 'citizen');
+
+CREATE TYPE direction as ENUM ('buy', 'sell');
+CREATE TYPE priceType as ENUM ('market', 'limit');
+
 CREATE TABLE IF NOT EXISTS accounts (
-    account_name TEXT UNIQUE NOT NULL PRIMARY KEY ON DELETE CASCADE,
+    account_name TEXT UNIQUE NOT NULL PRIMARY KEY,
     account_pass_hash TEXT,
     account_type accountType NOT NULL DEFAULT 'nation',
     cash_in_hand NUMERIC(100,2) NOT NULL DEFAULT 0.0 CHECK(cash_in_hand >= 0.0),
     cash_in_escrow NUMERIC(100,2) NOT NULL DEFAULT 0.0 CHECK(cash_in_escrow >= 0.0)
 );
-
-CREATE TYPE perm as ENUM ('admin', 'trader', 'citizen');
 
 CREATE TABLE IF NOT EXISTS nation_permissions (
     region_name TEXT NOT NULL REFERENCES accounts(account_name),
@@ -64,9 +67,6 @@ CREATE TABLE IF NOT EXISTS stock_holdings (
     PRIMARY KEY(ticker, account_name)
 );
 
-CREATE TYPE direction as ENUM ('buy', 'sell');
-CREATE TYPE priceType as ENUM ('market', 'limit');
-
 CREATE TABLE IF NOT EXISTS open_orders (
     trade_id bigint UNIQUE NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     ticker TEXT NOT NULL REFERENCES stocks(ticker),
@@ -76,6 +76,6 @@ CREATE TABLE IF NOT EXISTS open_orders (
     order_direction direction NOT NULL,
     price_type priceType NOT NULL,
     order_price NUMERIC(100,2) CHECK(order_price >= 0.0)
-)
+);
 
 INSERT INTO accounts (account_name, account_type, cash_in_hand) VALUES ('New West Conifer', 'region', 1000000);

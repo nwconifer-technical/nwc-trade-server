@@ -57,7 +57,7 @@ func main() {
 		gocron.NewTask(primaryEnv.logPrices, primCtx),
 	)
 	cronSched.NewJob(
-		gocron.CronJob(`5 00 * * *`, false),
+		gocron.CronJob(`5 0 * * *`, false),
 		gocron.NewTask(primaryEnv.updateLoanValues, primCtx),
 	)
 	cronSched.NewJob(
