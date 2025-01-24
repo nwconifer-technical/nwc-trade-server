@@ -123,6 +123,17 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	} else {
+		var existingShareVolume int
+		err := dbTx.QueryRow(r.Context(), `SELECT share_quant FROM stock_holdings WHERE ticker = $1 AND account_name = $2`, sentThing.Ticker, sentThing.Sender).Scan(&existingShareVolume)
+		if err != nil && err != pgx.ErrNoRows {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if err == pgx.ErrNoRows || existingShareVolume < sentThing.Quantity {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 	}
 
 	newPrice, err := tradePriceUpdate(r.Context(), dbTx, currentQuote, sentThing)

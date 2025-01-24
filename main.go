@@ -213,7 +213,7 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		csvW.Write([]string{"Time", "Market Price"})
+		csvW.Write([]string{"Time", (ticker + ` Price`)})
 		for dbRows.Next() {
 			var thisTCode time.Time
 			var thisPrice float64
