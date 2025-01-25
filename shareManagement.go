@@ -130,7 +130,7 @@ func (Env env) manualShareTransfer(w http.ResponseWriter, r *http.Request) {
 	defer dbTx.Rollback(r.Context())
 	if err = transferShares(r.Context(), dbTx, sentThing); err != nil {
 		if err == pgx.ErrNoRows {
-			w.WriteHeader(http.StatusUnprocessableEntity)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		log.Println("DB Err", err)

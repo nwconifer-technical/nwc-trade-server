@@ -397,6 +397,7 @@ func (Env env) updateLoanValues(ctx context.Context) error {
 		log.Println("Loan update job err", err)
 		return err
 	}
+	defer theLoans.Close()
 	loanBatch := pgx.Batch{}
 	for theLoans.Next() {
 		var loanId int
@@ -406,10 +407,15 @@ func (Env env) updateLoanValues(ctx context.Context) error {
 			log.Println("Loan update err", err)
 			return err
 		}
-		loanBatch.Queue(`UPDATE loans SET current_value = current_value * (1+($1/100)) WHERE loan_id = $2`, loanRate, loanRate)
+		newVal := curVal * (1 + (loanRate / 100))
+		loanBatch.Queue(`UPDATE loans SET current_value = $1 WHERE loan_id = $2`, newVal, loanId)
+	}
+	if err = theLoans.Err(); err != nil {
+		log.Println("Loan updating err", err)
+		return err
 	}
 	err = dbConn.SendBatch(ctx, &loanBatch).Close()
-	if err != nil && err != pgx.ErrNoRows {
+	if err != nil {
 		log.Println("Loan update job err", err)
 		return err
 	}

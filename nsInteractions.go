@@ -98,11 +98,11 @@ func realignPricesWithNS(dbConn *pgxpool.Conn, ctx context.Context) error {
 			updatedVals[currentOne.Id] = currentOne.Score
 		}
 		percentMove = percentMove * 0.2
-		if percentMove > 0.2 {
-			percentMove = 0.2
-		} else if percentMove < -0.2 {
-			percentMove = -0.2
-		}
+		// if percentMove > 0.2 {
+		// 	percentMove = 0.2
+		// } else if percentMove < -0.2 {
+		// 	percentMove = -0.2
+		// }
 		newMarketC := curMarketCap * (1 + percentMove)
 		newShareP := newMarketC / 1000000
 		allShareUpdates.Queue(`UPDATE stocks SET market_cap = $1, share_price = $2, share_stat1=$3, share_stat2=$4, share_stat3=$5, share_stat4=$6, share_stat5=$7 WHERE ticker = $8`, newMarketC, newShareP, updatedVals[255], updatedVals[76], updatedVals[74], updatedVals[66], updatedVals[48], ticker)
