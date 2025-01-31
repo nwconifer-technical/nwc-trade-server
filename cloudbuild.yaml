@@ -7,6 +7,7 @@ steps:
       - |
         echo "$$SSH_KEY" >> id_rsa
         chmod 400 id_rsa
+        git config --add --global core.sshCommand 'ssh -i ./id_rsa'
         git config --global url.ssh://git@github.com/.insteadOf https://github.com/
         go get
         make ciBuild
