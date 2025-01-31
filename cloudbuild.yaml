@@ -5,9 +5,10 @@ steps:
     args:
       - -c
       - |
-        go mod tidy
+        go get
         make ciBuild
-    secretEnv: ["DB_CONNECTSTRING", "EXTRA_KEY_STRING", "HASH_COST"]
+    secretEnv:
+      ["DB_CONNECTSTRING", "EXTRA_KEY_STRING", "HASH_COST", "GOPRIVATE"]
   - id: "Copy onto Box and Restart"
     name: "gcr.io/cloud-builders/gcloud"
     entrypoint: /bin/bash
@@ -30,3 +31,5 @@ availableSecrets:
       env: "EXTRA_KEY_STRING"
     - versionName: projects/335883769512/secrets/HASH_COST/versions/2
       env: "HASH_COST"
+    - versionName: projects/335883769512/secrets/GOPRIVATE/versions/1
+      env: "GOPRIVATE"
