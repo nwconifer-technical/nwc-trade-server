@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/nwconifer-technical/nwc_trade_private"
 )
 
 func (Env env) registerRegion(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +37,7 @@ func (Env env) registerRegion(w http.ResponseWriter, r *http.Request) {
 		log.Print("DB Err 2", err)
 		return
 	}
-	regionMarketCap, someVals, err := buildMarketCap(newRegion.RegionName)
+	regionMarketCap, someVals, err := nwc_trade_private.BuildMarketCap(newRegion.RegionName)
 	if err != nil {
 		log.Println("Market Cap Err", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -60,6 +62,15 @@ func (Env env) registerRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
+}
+
+func (Env env) runRealign(ctx context.Context) {
+	conn, err := Env.DBPool.Acquire(ctx)
+	if err != nil {
+		return
+	}
+	err = nwc_trade_private.RealignPricesWithNS(conn, ctx)
+	log.Println(err)
 }
 
 func (Env env) regionInfo(w http.ResponseWriter, r *http.Request) {

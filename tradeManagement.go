@@ -186,7 +186,7 @@ func (Env env) openTrade(w http.ResponseWriter, r *http.Request) {
 		// ignore-not-used
 		var transferAmount int
 		var updOppTrade tradeFormat
-		transferAmount, updOppTrade, updSentThing = updateTradeObjs(oppTrade, sentThing)
+		transferAmount = updateTradeObjs(&oppTrade, &sentThing)
 		cashValue := sentThing.Price * float32(transferAmount)
 		var cashTransfer transactionFormat
 		var shareTrans shareTransfer
@@ -287,22 +287,20 @@ func tradePriceUpdate(ctx context.Context, dbTx pgx.Tx, currentQuote Quote, theT
 	return (newMarketCap / float32(currentQuote.TotalVolume)), nil
 }
 
-func updateTradeObjs(oppTrade tradeFormat, sentThing tradeFormat) (int, tradeFormat, tradeFormat) {
+func updateTradeObjs(oppTrade *tradeFormat, sentThing *tradeFormat) int {
 	var transferAmount int
-	newOppTrade := oppTrade.copy()
-	newSentThing := sentThing.copy()
 	if sentThing.Quantity > oppTrade.Quantity {
 		transferAmount = oppTrade.Quantity
-		newSentThing.Quantity -= oppTrade.Quantity
-		newOppTrade.Quantity = 0
+		sentThing.Quantity -= oppTrade.Quantity
+		oppTrade.Quantity = 0
 	} else if sentThing.Quantity == oppTrade.Quantity {
-		transferAmount = newSentThing.Quantity
-		newOppTrade.Quantity = 0
-		newSentThing.Quantity = 0
+		transferAmount = sentThing.Quantity
+		oppTrade.Quantity = 0
+		sentThing.Quantity = 0
 	} else if sentThing.Quantity < oppTrade.Quantity {
-		transferAmount = newSentThing.Quantity
-		newSentThing.Quantity = 0
-		newOppTrade.Quantity -= sentThing.Quantity
+		transferAmount = sentThing.Quantity
+		sentThing.Quantity = 0
+		oppTrade.Quantity -= sentThing.Quantity
 	}
-	return transferAmount, newOppTrade, newSentThing
+	return transferAmount
 }

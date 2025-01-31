@@ -14,8 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// postgres://postgres:hellofrend@104.198.238.223:5432/nwc_am_db?pool_min_conns=1&pool_max_conns=10
-
 var HashCost,
 	DbString,
 	ExtraKeyString string

@@ -4,9 +4,10 @@ go 1.22.2
 
 require (
 	github.com/go-co-op/gocron/v2 v2.14.0
-	github.com/gosimple/slug v1.14.0
-	github.com/jackc/pgx/v5 v5.7.1
-	golang.org/x/crypto v0.28.0
+	github.com/gosimple/slug v1.15.0
+	github.com/jackc/pgx/v5 v5.7.2
+	github.com/nwconifer-technical/nwc_trade_private v1.0.2
+	golang.org/x/crypto v0.31.0
 )
 
 require (
@@ -18,6 +19,6 @@ require (
 	github.com/jonboulle/clockwork v0.4.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/text v0.19.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )
