@@ -5,8 +5,8 @@ steps:
     args:
       - -c
       - |
-        echo "$$SSH_KEY" >> /root/.ssh/id_rsa
-        chmod 400 /root/.ssh/id_rsa
+        echo "$$SSH_KEY" >> id_rsa
+        chmod 400 id_rsa
         git config --global url.ssh://git@github.com/.insteadOf https://github.com/
         go get
         make ciBuild
@@ -18,9 +18,6 @@ steps:
         "GOPRIVATE",
         "SSH_KEY",
       ]
-    volumes:
-      - name: "ssh"
-        path: /root/.ssh
   - id: "Copy onto Box and Restart"
     name: "gcr.io/cloud-builders/gcloud"
     entrypoint: /bin/bash
