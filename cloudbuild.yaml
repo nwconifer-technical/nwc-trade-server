@@ -18,6 +18,9 @@ steps:
         "GOPRIVATE",
         "SSH_KEY",
       ]
+    volumes:
+      - name: "ssh"
+        path: /root/.ssh
   - id: "Copy onto Box and Restart"
     name: "gcr.io/cloud-builders/gcloud"
     entrypoint: /bin/bash
