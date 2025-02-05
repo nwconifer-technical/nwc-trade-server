@@ -172,11 +172,6 @@ func (Env env) manualShareTransfer(w http.ResponseWriter, r *http.Request) {
 		log.Println("JSON Err", err)
 		return
 	}
-	if sentThing.Sender != r.Header.Get("NationName") {
-		log.Println("Auth Err", err)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
 	dbTx, err := Env.DBPool.Begin(r.Context())
 	if err != nil {
 		log.Println("Tx Err", err)
@@ -184,6 +179,39 @@ func (Env env) manualShareTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer dbTx.Rollback(r.Context())
+	var account_type string
+	err = dbTx.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, sentThing.Sender).Scan(&account_type)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Println("Auth Err 1", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if account_type == "region" {
+		var permission string
+		err = dbTx.QueryRow(r.Context(), `SELECT permission FROM nation_permissions WHERE region_name = $1 AND nation_name = $2`, sentThing.Sender, r.Header.Get("NationName")).Scan(&permission)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			log.Println("Auth Err 2", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if permission != "trader" && permission != "admin" && r.Header.Get("NationName") != "Gallaton" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	} else if account_type == "nation" {
+		if sentThing.Sender != r.Header.Get("NationName") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	}
 	if err = transferShares(r.Context(), dbTx, sentThing); err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)
@@ -214,8 +242,7 @@ func transferShares(ctx context.Context, dbTx pgx.Tx, transfer shareTransfer) er
 		return pgx.ErrNoRows
 	}
 	err = dbTx.QueryRow(ctx,
-		// `INSERT INTO stock_holdings (ticker, account_name, share_quant, avg_price) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker, account_name) DO UPDATE SET share_quant = stock_holdings.share_quant + EXCLUDED.share_quant, avg_price = stock_holdings.avg_price + ((EXCLUDED.avg_price - stock_holdings.avg_price) * (stock_holdings.share_quant / EXCLUDED.share_quant));`,
-		`INSERT INTO stock_holdings (ticker, account_name, share_quant, avg_price) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker, account_name) DO UPDATE SET share_quant = stock_holdings.share_quant + EXCLUDED.share_quant;`,
+		`INSERT INTO stock_holdings (ticker, account_name, share_quant, avg_price) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker, account_name) DO UPDATE SET share_quant = stock_holdings.share_quant + EXCLUDED.share_quant, avg_price = stock_holdings.avg_price + ((EXCLUDED.avg_price - stock_holdings.avg_price) * (stock_holdings.share_quant / EXCLUDED.share_quant));`,
 		transfer.Ticker, transfer.Receiver, transfer.Quantity, transfer.AvgPrice).Scan()
 	if err != nil && err != pgx.ErrNoRows {
 		return err
