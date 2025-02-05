@@ -69,8 +69,9 @@ func createShares(ctx context.Context, dbTx pgx.Tx, region string, numberofShare
 	}
 	err = dbTx.QueryRow(ctx, `UPDATE open_orders SET open_price = $1 WHERE ticker = $2 AND price_type = 'market';`, market_cap/newVol, ticker).Scan()
 	if err != nil && err != pgx.ErrNoRows {
-
+		return err
 	}
+	return nil
 }
 
 type createSend struct {
