@@ -28,6 +28,7 @@ func (Env env) runRealign(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	defer conn.Release()
 	err = realignPricesWithNS(conn, ctx)
 	log.Println(err)
 }
