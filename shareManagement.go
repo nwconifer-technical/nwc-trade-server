@@ -67,7 +67,7 @@ func createShares(ctx context.Context, dbTx pgx.Tx, region string, numberofShare
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
-	err = dbTx.QueryRow(ctx, `UPDATE open_orders SET open_price = $1 WHERE ticker = $2 AND price_type = 'market';`, market_cap/newVol, ticker).Scan()
+	err = dbTx.QueryRow(ctx, `UPDATE open_orders SET order_price = $1 WHERE ticker = $2 AND price_type = 'market';`, market_cap/newVol, ticker).Scan()
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
