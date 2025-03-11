@@ -243,7 +243,8 @@ func transferShares(ctx context.Context, dbTx pgx.Tx, transfer shareTransfer) er
 		return pgx.ErrNoRows
 	}
 	err = dbTx.QueryRow(ctx,
-		`INSERT INTO stock_holdings (ticker, account_name, share_quant, avg_price) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker, account_name) DO UPDATE SET share_quant = stock_holdings.share_quant + EXCLUDED.share_quant, avg_price = stock_holdings.avg_price + ((EXCLUDED.avg_price - stock_holdings.avg_price) * (stock_holdings.share_quant / EXCLUDED.share_quant));`,
+		// `INSERT INTO stock_holdings (ticker, account_name, share_quant, avg_price) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker, account_name) DO UPDATE SET share_quant = stock_holdings.share_quant + EXCLUDED.share_quant, avg_price = stock_holdings.avg_price + ((EXCLUDED.avg_price - stock_holdings.avg_price) * (stock_holdings.share_quant / EXCLUDED.share_quant));`,
+		`INSERT INTO stock_holdings (ticker, account_name, share_quant, avg_price) VALUES ($1, $2, $3, $4) ON CONFLICT (ticker, account_name) DO UPDATE SET share_quant = stock_holdings.share_quant + EXCLUDED.share_quant;`,
 		transfer.Ticker, transfer.Receiver, transfer.Quantity, transfer.AvgPrice).Scan()
 	if err != nil && err != pgx.ErrNoRows {
 		return err
