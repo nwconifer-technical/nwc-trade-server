@@ -64,7 +64,64 @@ func createShares(ctx context.Context, dbTx pgx.Tx, region string, numberofShare
 		return err
 	}
 	err = dbTx.QueryRow(ctx, `UPDATE stocks SET total_share_volume = total_share_volume + $1, share_price = $2 WHERE ticker = $3`, numberofShares, market_cap/newVol, ticker).Scan()
-	return err
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	err = dbTx.QueryRow(ctx, `UPDATE open_orders SET order_price = $1 WHERE ticker = $2 AND price_type = 'market';`, market_cap/newVol, ticker).Scan()
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	return nil
+}
+
+type createSend struct {
+	Region   string `json:"region"`
+	Quantity int    `json:"quantity"`
+}
+
+func (Env env) manualCreateShares(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	acct := r.Header.Get("NationName")
+	var sendingData createSend
+	err := decoder.Decode(&sendingData)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	dbConn, err := Env.DBPool.Begin(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("TX Create Err", err)
+		return
+	}
+	defer dbConn.Rollback(r.Context())
+	var natPerm string
+	err = dbConn.QueryRow(r.Context(), `SELECT permission FROM accounts WHERE nation_name = $1 AND region_name = $2`, acct, sendingData.Region).Scan(&natPerm)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("AccType Query Err", err)
+		return
+	}
+	if natPerm == "citizen" {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	err = createShares(r.Context(), dbConn, sendingData.Region, sendingData.Quantity)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = dbConn.Commit(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	return
 }
 
 type Quote struct {
@@ -116,11 +173,6 @@ func (Env env) manualShareTransfer(w http.ResponseWriter, r *http.Request) {
 		log.Println("JSON Err", err)
 		return
 	}
-	if sentThing.Sender != r.Header.Get("NationName") {
-		log.Println("Auth Err", err)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
 	dbTx, err := Env.DBPool.Begin(r.Context())
 	if err != nil {
 		log.Println("Tx Err", err)
@@ -128,6 +180,39 @@ func (Env env) manualShareTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer dbTx.Rollback(r.Context())
+	var account_type string
+	err = dbTx.QueryRow(r.Context(), `SELECT account_type FROM accounts WHERE account_name = $1`, sentThing.Sender).Scan(&account_type)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Println("Auth Err 1", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if account_type == "region" {
+		var permission string
+		err = dbTx.QueryRow(r.Context(), `SELECT permission FROM nation_permissions WHERE region_name = $1 AND nation_name = $2`, sentThing.Sender, r.Header.Get("NationName")).Scan(&permission)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			log.Println("Auth Err 2", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if permission != "trader" && permission != "admin" && r.Header.Get("NationName") != "Gallaton" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	} else if account_type == "nation" {
+		if sentThing.Sender != r.Header.Get("NationName") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	}
 	if err = transferShares(r.Context(), dbTx, sentThing); err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusNotFound)

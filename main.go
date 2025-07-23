@@ -170,6 +170,9 @@ func main() {
 		}
 		anEncoder.Encode(returnTrade)
 	})
+	theMux.HandleFunc("POST /shares/create", func(w http.ResponseWriter, r *http.Request) {
+		primaryEnv.securedWrapper(w, r, primaryEnv.manualCreateShares)
+	})
 	theMux.HandleFunc("DELETE /shares/trade/{id}", func(w http.ResponseWriter, r *http.Request) {
 		primaryEnv.securedWrapper(w, r, func(w http.ResponseWriter, r *http.Request) {
 			tradeId := r.PathValue("id")
@@ -201,6 +204,7 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer dbConn.Release()
 		dbRows, err := dbConn.Query(r.Context(), `SELECT timecode, log_market_price FROM stock_prices WHERE ticker = $1 ORDER BY timecode ASC;`, ticker)
 		if err != nil {
 			if err == pgx.ErrNoRows {

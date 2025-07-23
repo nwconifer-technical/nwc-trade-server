@@ -330,6 +330,7 @@ func (Env env) writeOffLoan(w http.ResponseWriter, r *http.Request) {
 		log.Println("writeOff DB Err", err)
 		return
 	}
+	defer dbConn.Release()
 	err = dbConn.QueryRow(r.Context(), `SELECT lender FROM loans WHERE loan_id = $1`, loanId).Scan(&lender)
 	if err != nil {
 		if err == pgx.ErrNoRows {
